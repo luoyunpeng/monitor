@@ -99,8 +99,8 @@ func SetByte(respByte []byte) (*HumanizeStats, error) {
 	previousSystem = statsJSON.PreCPUStats.SystemUsage
 	cpuPercent = calculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
 	blkRead, blkWrite = calculateBlockIO(statsJSON.BlkioStats)
-	mem = calculateMemUsageUnixNoCache(statsJSON.MemoryStats)
-	memLimit = float64(statsJSON.MemoryStats.Limit)
+	mem = calculateMemUsageUnixNoCache(statsJSON.MemoryStats) / (1024 * 1024)
+	memLimit = float64(statsJSON.MemoryStats.Limit) / (1024 * 1024)
 	memPercent = calculateMemPercentUnixNoCache(memLimit, mem)
 	pidsStatsCurrent = statsJSON.PidsStats.Current
 	netRx, netTx := calculateNetwork(statsJSON.Networks)
