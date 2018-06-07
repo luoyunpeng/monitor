@@ -6,7 +6,9 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"runtime"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -15,8 +17,8 @@ import (
 )
 
 var (
-	host = "tcp://ip:2375"
-	cli  *client.Client
+	host      = "tcp://ip:2375"
+	dockerCli *client.Client
 )
 
 type DockerClientPool struct {
@@ -24,9 +26,17 @@ type DockerClientPool struct {
 	initSize int
 }
 
+func init() {
+	var err error
+	dockerCli, err = initClient()
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	router := gin.Default()
-	v1 := router.Group("demo")
+	v1 := router.Group("")
 
 	//v1.GET("/users", getUsers)
 	v1.GET("/container/stats/:id", getStatsByID)
@@ -37,8 +47,23 @@ func main() {
 	router.Run()
 }
 
-func initClient() {
-	cli, _ = client.NewClientWithOpts(client.WithHost(host))
+func initClient() (*client.Client, error) {
+	var (
+		err error
+		cli *client.Client
+	)
+	if runtime.GOOS == "windows" {
+		log.Println("init docker client from given host")
+		cli, err = client.NewClientWithOpts(client.WithHost(host))
+	} else {
+		cli, err = client.NewClientWithOpts(client.FromEnv)
+		log.Println("init docker client from Env")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return cli, err
 }
 
 func getStatsByID(ctx *gin.Context) {
@@ -48,7 +73,7 @@ func getStatsByID(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := cli.ContainerStats(context.Background(), id, false)
+	resp, err := dockerCli.ContainerStats(context.Background(), id, false)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err)
 		return
@@ -87,7 +112,7 @@ func getLog(ctx *gin.Context) {
 		Tail:       size,
 	}
 	bufferLogString := bytes.NewBufferString("")
-	respRead, err := cli.ContainerLogs(context.Background(), id, logOptions)
+	respRead, err := dockerCli.ContainerLogs(context.Background(), id, logOptions)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err)
 		return
