@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"syscall"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -34,6 +35,33 @@ func init() {
 	}
 }
 
+type MemStatus struct {
+	All  uint32 `json:"all"`
+	Used uint32 `json:"used"`
+	Free uint32 `json:"free"`
+	Self uint64 `json:"self"`
+}
+
+func MemStat() MemStatus {
+	//自身占用
+	memStat := new(runtime.MemStats)
+	runtime.ReadMemStats(memStat)
+	mem := MemStatus{}
+	mem.Self = memStat.Alloc
+
+	//系统占用,仅linux/mac下有效
+	//system memory usage
+	sysInfo := new(syscall.Sysinfo_t)
+
+	err := syscall.Sysinfo(sysInfo)
+	if err == nil {
+		mem.All = sysInfo.Totalram * uint32(syscall.Getpagesize())
+		mem.Free = sysInfo.Freeram * uint32(syscall.Getpagesize())
+		mem.Used = mem.All - mem.Free
+	}
+	return mem
+}
+
 func main() {
 	router := gin.Default()
 	v1 := router.Group("")
@@ -43,7 +71,12 @@ func main() {
 	v1.GET("/container/logs/:id", getLog)
 
 	// By default it serves on :8080
-	initClient()
+
+	mem := MemStat()
+	println("all: ", mem.All)
+	println("used: ", mem.Used)
+	println("free: ", mem.Free)
+	println("self used: ", mem.Self)
 	router.Run()
 }
 
@@ -128,4 +161,31 @@ func getLog(ctx *gin.Context) {
 		bufferLogString.WriteString(line[8:])
 	}
 	ctx.String(http.StatusOK, bufferLogString.String())
+}
+
+func keepMonitor() {
+	cli, err := initClient()
+	if err != nil {
+		log.Println("err happen when keep moniting----", err)
+		return
+	}
+	id := ""
+	resp, err := cli.ContainerStats(context.Background(), id, false)
+	if err != nil {
+		log.Println("err happen when geting stats from api----", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	respByte, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("err happen when read from resp body----", err)
+		return
+	}
+
+	hstats, err := tool.SetByte(respByte)
+	if err != nil {
+		log.Println("err happen when read from resp body----", err)
+		return
+	}
 }
