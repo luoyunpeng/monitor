@@ -269,6 +269,12 @@
 			"revisionTime": "2018-04-22T16:34:14Z"
 		},
 		{
+			"checksumSHA1": "+ukkAI9DvJ59HlvJSTVWME5Rqcg=",
+			"path": "golang.org/x/net/internal/socks",
+			"revision": "8e0cdda24ed423affc8f35c241e5e9b16180338e",
+			"revisionTime": "2018-04-25T08:40:29Z"
+		},
+		{
 			"checksumSHA1": "vRsiAquqGF6acraetJXhJ70g07Y=",
 			"origin": "github.com/docker/docker/vendor/golang.org/x/net/proxy",
 			"path": "golang.org/x/net/proxy",
