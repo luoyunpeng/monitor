@@ -163,7 +163,8 @@
 			"checksumSHA1": "XOgU9YM/4/DGwdjt3miz68gM0yQ=",
 			"path": "github.com/gin-gonic/gin",
 			"revision": "65a65c2edd4e86f96634a553f07a25c38f2b1c75",
-			"revisionTime": "2018-03-20T06:42:51Z"
+			"revisionTime": "2018-03-20T06:42:51Z",
+			"version": "v1.2"
 		},
 		{
 			"checksumSHA1": "jfzaIhRB69YKvY1KgaUhL66omiQ=",
