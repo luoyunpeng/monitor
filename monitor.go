@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"runtime"
 
@@ -151,7 +152,7 @@ func getHostMemInfo(ctx *gin.Context) {
 		Used:        vMem.Used / 1024,
 		Free:        vMem.Free / 1024,
 		Available:   vMem.Available / 1024,
-		UserPercent: vMem.UsedPercent,
+		UserPercent: math.Trunc(vMem.UsedPercent*1e2+0.5) * 1e-2,
 	}
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSON(http.StatusOK, hostMemInfo)
