@@ -59,7 +59,7 @@ func initClient() (*client.Client, error) {
 		cli, err = client.NewClientWithOpts(client.WithHost(host))
 	} else {
 		cli, err = client.NewClientWithOpts(client.FromEnv)
-		log.Println("init docker client from Env")
+		log.Println("[ monitor ]  init docker client from env")
 	}
 
 	if err != nil {
