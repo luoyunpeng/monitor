@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"runtime"
-	"syscall"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -165,4 +164,5 @@ func keepMonitor() {
 		log.Println("err happen when read from resp body----", err)
 		return
 	}
+	fmt.Println(hstats)
 }
