@@ -49,7 +49,7 @@ func main() {
     v, _ := mem.VirtualMemory()
 
     // almost every return value is a struct
-    fmt.Printf("Total: %v, Free:%v, UsedPercent:%f%%\n", v.Total, v.Free, v.UsedPercent)
+    fmt.Printf("Total: %v, Free:%v, UsedPercent:%f%%\n", float64(v.Total)/(1024*1024), float64(v.Free)/(1024*1024), v.UsedPercent)
 
     // convert to JSON. String() is also implemented
     fmt.Println(v)
