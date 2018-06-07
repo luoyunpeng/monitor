@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-    "fmt"
-    "io"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,8 +14,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
-    "github.com/luoyunpeng/monitor/mem"
-    "github.com/luoyunpeng/monitor/tool"
+	"github.com/luoyunpeng/monitor/mem"
+	"github.com/luoyunpeng/monitor/tool"
 )
 
 var (
@@ -36,7 +36,6 @@ func init() {
 	}
 }
 
-
 func main() {
 	router := gin.Default()
 	v1 := router.Group("")
@@ -44,15 +43,9 @@ func main() {
 	//v1.GET("/users", getUsers)
 	v1.GET("/container/stats/:id", getStatsByID)
 	v1.GET("/container/logs/:id", getLog)
+	v1.GET("/container/hosts/mem", getHostMemInfo)
 
 	// By default it serves on :8080
-    v, _ := mem.VirtualMemory()
-
-    // almost every return value is a struct
-    fmt.Printf("Total: %v, Free:%v, UsedPercent:%f%%\n", float64(v.Total)/(1024*1024), float64(v.Free)/(1024*1024), v.UsedPercent)
-
-    // convert to JSON. String() is also implemented
-    fmt.Println(v)
 	router.Run()
 }
 
@@ -62,7 +55,7 @@ func initClient() (*client.Client, error) {
 		cli *client.Client
 	)
 	if runtime.GOOS == "windows" {
-		log.Println("init docker client from given host")
+		log.Println("[ monitor ]  init docker client from given host")
 		cli, err = client.NewClientWithOpts(client.WithHost(host))
 	} else {
 		cli, err = client.NewClientWithOpts(client.FromEnv)
@@ -137,6 +130,31 @@ func getLog(ctx *gin.Context) {
 		bufferLogString.WriteString(line[8:])
 	}
 	ctx.String(http.StatusOK, bufferLogString.String())
+}
+
+func getHostMemInfo(ctx *gin.Context) {
+	vMem, err := mem.VirtualMemory()
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err)
+		return
+	}
+
+	hostMemInfo := struct {
+		Available      uint64
+		Total          uint64
+		Used           uint64
+		Free           uint64
+		Shared         uint64
+		BufferAndCache uint64
+	}{
+		Total:     vMem.Total / (1024 * 1024),
+		Used:      vMem.Used / (1024 * 1024),
+		Free:      vMem.Free / (1024 * 1024),
+		Shared:    vMem.Shared / (1024 * 1024),
+		Available: vMem.Available / (1024 * 1024),
+	}
+	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
+	ctx.JSON(http.StatusOK, hostMemInfo)
 }
 
 func keepMonitor() {
