@@ -110,38 +110,38 @@ func VirtualMemoryWithContext(ctx context.Context) (*VirtualMemoryStat, error) {
 		}
 		switch key {
 		case "MemTotal":
-			ret.Total = t * 1024
+			ret.Total = t
 		case "MemFree":
-			ret.Free = t * 1024
+			ret.Free = t
 		case "MemAvailable":
 			memavail = true
-			ret.Available = t * 1024
+			ret.Available = t
 		case "Buffers":
-			ret.Buffers = t * 1024
+			ret.Buffers = t
 		case "Cached":
-			ret.Cached = t * 1024
+			ret.Cached = t
 		case "Active":
-			ret.Active = t * 1024
+			ret.Active = t
 		case "Inactive":
-			ret.Inactive = t * 1024
+			ret.Inactive = t
 		case "Writeback":
-			ret.Writeback = t * 1024
+			ret.Writeback = t
 		case "WritebackTmp":
-			ret.WritebackTmp = t * 1024
+			ret.WritebackTmp = t
 		case "Dirty":
-			ret.Dirty = t * 1024
+			ret.Dirty = t
 		case "Shmem":
-			ret.Shared = t * 1024
+			ret.Shared = t
 		case "Slab":
-			ret.Slab = t * 1024
+			ret.Slab = t
 		case "PageTables":
-			ret.PageTables = t * 1024
+			ret.PageTables = t
 		case "SwapCached":
-			ret.SwapCached = t * 1024
+			ret.SwapCached = t
 		case "CommitLimit":
-			ret.CommitLimit = t * 1024
+			ret.CommitLimit = t
 		case "Committed_AS":
-			ret.CommittedAS = t * 1024
+			ret.CommittedAS = t
 		}
 	}
 	if !memavail {

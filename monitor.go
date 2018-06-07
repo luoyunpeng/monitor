@@ -43,7 +43,7 @@ func main() {
 	//v1.GET("/users", getUsers)
 	v1.GET("/container/stats/:id", getStatsByID)
 	v1.GET("/container/logs/:id", getLog)
-	v1.GET("/container/hosts/mem", getHostMemInfo)
+	v1.GET("/host/mem", getHostMemInfo)
 
 	// By default it serves on :8080
 	router.Run()
@@ -144,14 +144,14 @@ func getHostMemInfo(ctx *gin.Context) {
 		Total          uint64
 		Used           uint64
 		Free           uint64
-		Shared         uint64
 		BufferAndCache uint64
+		UserPercent    float64
 	}{
-		Total:     vMem.Total / (1024 * 1024),
-		Used:      vMem.Used / (1024 * 1024),
-		Free:      vMem.Free / (1024 * 1024),
-		Shared:    vMem.Shared / (1024 * 1024),
-		Available: vMem.Available / (1024 * 1024),
+		Total:       vMem.Total / 1024,
+		Used:        vMem.Used / 1024,
+		Free:        vMem.Free / 1024,
+		Available:   vMem.Available / 1024,
+		UserPercent: vMem.UsedPercent,
 	}
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSON(http.StatusOK, hostMemInfo)
