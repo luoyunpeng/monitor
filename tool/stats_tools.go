@@ -27,6 +27,10 @@ type HumanizeStats struct {
 	BlockRead        float64
 	BlockWrite       float64
 	PidsCurrent      uint64 // Not used on Windows
+
+	//time
+	ReadTime    time.Time
+	PreReadTime time.Time
 }
 
 func Set(response types.ContainerStats) (s *HumanizeStats) {
@@ -75,6 +79,8 @@ func Set(response types.ContainerStats) (s *HumanizeStats) {
 	s.BlockRead = float64(blkRead)
 	s.BlockWrite = float64(blkWrite)
 	s.PidsCurrent = pidsStatsCurrent
+	s.ReadTime = statsJSON.Read
+	s.PreReadTime = statsJSON.PreRead
 	return
 }
 
