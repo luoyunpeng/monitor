@@ -122,8 +122,8 @@ func Collect(respByte []byte) (*HumanizeStats, error) {
 	s.BlockRead = float64(blkRead)
 	s.BlockWrite = float64(blkWrite)
 	s.PidsCurrent = pidsStatsCurrent
-	s.ReadTime = statsJSON.Read.Format("2006-01-02 15:04:05")
-	s.PreReadTime = statsJSON.PreRead.Format("2006-01-02 15:04:05")
+	s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+	s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 	return s, nil
 }
 
