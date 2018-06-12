@@ -78,7 +78,7 @@ func Set(response types.ContainerStats) (s *HumanizeStats) {
 	return
 }
 
-func SetByte(respByte []byte) (*HumanizeStats, error) {
+func Collect(respByte []byte) (*HumanizeStats, error) {
 	var (
 		previousCPU    uint64
 		previousSystem uint64

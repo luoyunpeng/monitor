@@ -15,15 +15,17 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
-	"github.com/luoyunpeng/monitor/mem"
+	"github.com/luoyunpeng/monitor/host"
 	"github.com/luoyunpeng/monitor/tool"
+	"github.com/pkg/errors"
 )
 
 var (
-	host      = "tcp://ip:2375"
+	hostURL   = "tcp://ip:2375"
 	dockerCli *client.Client
 )
 
+//change to sync.Pool ??
 type DockerClientPool struct {
 	min      int
 	initSize int
@@ -41,12 +43,12 @@ func main() {
 	router := gin.Default()
 	v1 := router.Group("")
 
-	//v1.GET("/users", getUsers)
-	v1.GET("/container/stats/:id", getStatsByID)
-	v1.GET("/container/logs/:id", getLog)
-	v1.GET("/host/mem", getHostMemInfo)
+	v1.GET("/container/stats/:id", ContainerStats)
+	v1.GET("/container/logs/:id", ContainerLogs)
+	v1.GET("/host/mem", HostMemInfo)
 
 	// By default it serves on :8080
+	//go keepStatsContainer()
 	router.Run()
 }
 
@@ -57,7 +59,7 @@ func initClient() (*client.Client, error) {
 	)
 	if runtime.GOOS == "windows" {
 		log.Println("[ monitor ]  init docker client from given host")
-		cli, err = client.NewClientWithOpts(client.WithHost(host))
+		cli, err = client.NewClientWithOpts(client.WithHost(hostURL))
 	} else {
 		cli, err = client.NewClientWithOpts(client.FromEnv)
 		log.Println("[ monitor ]  init docker client from env")
@@ -69,7 +71,7 @@ func initClient() (*client.Client, error) {
 	return cli, err
 }
 
-func getStatsByID(ctx *gin.Context) {
+func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	if len(id) == 0 {
 		ctx.JSON(http.StatusNotFound, "container id or name must given")
@@ -89,7 +91,7 @@ func getStatsByID(ctx *gin.Context) {
 		return
 	}
 
-	hstats, err := tool.SetByte(respByte)
+	hstats, err := tool.Collect(respByte)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err)
 		return
@@ -97,7 +99,7 @@ func getStatsByID(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, hstats)
 }
 
-func getLog(ctx *gin.Context) {
+func ContainerLogs(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	size := ctx.Params.ByName("size")
 	if size == "" {
@@ -133,8 +135,8 @@ func getLog(ctx *gin.Context) {
 	ctx.String(http.StatusOK, bufferLogString.String())
 }
 
-func getHostMemInfo(ctx *gin.Context) {
-	vMem, err := mem.VirtualMemory()
+func HostMemInfo(ctx *gin.Context) {
+	vMem, err := host.VirtualMemory()
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err)
 		return
@@ -158,30 +160,50 @@ func getHostMemInfo(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, hostMemInfo)
 }
 
-func keepMonitor() {
-	cli, err := initClient()
-	if err != nil {
-		log.Println("err happen when keep moniting----", err)
-		return
+func ContainersID() ([]string, error) {
+	listOpt := types.ContainerListOptions{
+		Quiet: true,
 	}
-	id := ""
-	resp, err := cli.ContainerStats(context.Background(), id, false)
+	containers, err := dockerCli.ContainerList(context.Background(), listOpt)
 	if err != nil {
-		log.Println("err happen when geting stats from api----", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	respByte, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("err happen when read from resp body----", err)
-		return
+		return nil, err
 	}
 
-	hstats, err := tool.SetByte(respByte)
-	if err != nil {
-		log.Println("err happen when read from resp body----", err)
-		return
+	ids := make([]string, len(containers))
+	for _, c := range containers {
+		ids = append(ids, c.ID[:12])
 	}
-	fmt.Println(hstats)
+
+	return ids, nil
+}
+
+func internalStats(ids []string) ([]tool.HumanizeStats, error) {
+	if len(ids) == 0 {
+		log.Println("container id or name must given")
+		return nil, errors.New("container id or name must given")
+	}
+
+	for _, id := range ids {
+		go func(id string) {
+			resp, err := dockerCli.ContainerStats(context.Background(), id, false)
+			if err != nil {
+
+			}
+			defer resp.Body.Close()
+
+			respByte, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			hstats, err := tool.Collect(respByte)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			fmt.Println(hstats)
+		}(id)
+	}
+	return nil, nil
 }
