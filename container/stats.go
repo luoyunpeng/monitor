@@ -17,7 +17,10 @@ import (
 	"github.com/docker/docker/client"
 )
 
-var logger *log.Logger
+var (
+	logger         *log.Logger
+	BufferedCStats = &stats{}
+)
 
 type statsOptions struct {
 	all        bool
@@ -71,7 +74,6 @@ func KeepStats(dockerCli *client.Client) {
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
 
-	cStats := stats{}
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
 	getContainerList := func() {
@@ -84,7 +86,7 @@ func KeepStats(dockerCli *client.Client) {
 		}
 		for _, container := range cs {
 			s := NewContainerStats(container.ID[:12])
-			if cStats.add(s) {
+			if BufferedCStats.add(s) {
 				waitFirst.Add(1)
 				go collect(ctx, s, dockerCli, waitFirst)
 			}
@@ -100,7 +102,7 @@ func KeepStats(dockerCli *client.Client) {
 
 	eh.Handle("start", func(e events.Message) {
 		s := NewContainerStats(e.ID[:12])
-		if cStats.add(s) {
+		if BufferedCStats.add(s) {
 			waitFirst.Add(1)
 			go collect(ctx, s, dockerCli, waitFirst)
 		}
@@ -108,7 +110,7 @@ func KeepStats(dockerCli *client.Client) {
 
 	eh.Handle("die", func(e events.Message) {
 		if !opts.all {
-			cStats.remove(e.ID[:12])
+			BufferedCStats.remove(e.ID[:12])
 		}
 	})
 
@@ -127,11 +129,11 @@ func KeepStats(dockerCli *client.Client) {
 	//record cStats to log files
 	for range time.Tick(time.Second * 15) {
 		ccstats := []HumanizeStats{}
-		cStats.mu.Lock()
-		for _, c := range cStats.cs {
+		BufferedCStats.mu.Lock()
+		for _, c := range BufferedCStats.cs {
 			ccstats = append(ccstats, c.GetStatistics())
 		}
-		cStats.mu.Unlock()
+		BufferedCStats.mu.Unlock()
 		logger.Println(ccstats)
 
 		select {
@@ -253,4 +255,20 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			}
 		}
 	}
+}
+
+func Getstatics(id string) (*HumanizeStats, error) {
+	if len(BufferedCStats.cs) == 0 {
+		return nil, errors.New("no container stats")
+	}
+
+	var (
+		index   int
+		isKnown bool
+	)
+	if index, isKnown = BufferedCStats.isKnownContainer(id); !isKnown {
+		return nil, errors.New("given container name or id is unknown, or container is not running")
+	}
+
+	return BufferedCStats.cs[index].GetStatistics(), nil
 }

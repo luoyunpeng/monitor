@@ -64,24 +64,31 @@ func ContainerStats(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := dockerCli.ContainerStats(context.Background(), id, false)
+	hstats, err := container.Getstatics(id)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err)
+		ctx.String(http.StatusNotFound, err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	/*
+		resp, err := dockerCli.ContainerStats(context.Background(), id, false)
+		if err != nil {
+			ctx.JSON(http.StatusNotFound, err)
+			return
+		}
+		defer resp.Body.Close()
 
-	respByte, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err)
-		return
-	}
+		respByte, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			ctx.JSON(http.StatusNotFound, err)
+			return
+		}
 
-	hstats, err := container.Collect(respByte)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err)
-		return
-	}
+		hstats, err := container.Collect(respByte)
+		if err != nil {
+			ctx.JSON(http.StatusNotFound, err)
+			return
+		}
+	*/
 	ctx.JSON(http.StatusOK, hstats)
 }
 

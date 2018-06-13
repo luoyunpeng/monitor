@@ -101,10 +101,10 @@ func (cs *CStats) SetStatistics(s HumanizeStats) {
 }
 
 // GetStatistics returns container statistics with other meta data such as the container name
-func (cs *CStats) GetStatistics() HumanizeStats {
+func (cs *CStats) GetStatistics() *HumanizeStats {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	return cs.HumanizeStats
+	return &cs.HumanizeStats
 }
 
 // NewContainerStats returns a new ContainerStats entity and sets in it the given name
