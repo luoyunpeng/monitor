@@ -125,7 +125,7 @@ func KeepStats(dockerCli *client.Client) {
 
 	logger.Println("log all running container stats every 4 seconds")
 	//record cStats to log files
-	for range time.Tick(time.Second * 4) {
+	for range time.Tick(time.Second * 15) {
 		ccstats := []HumanizeStats{}
 		cStats.mu.Lock()
 		for _, c := range cStats.cs {
@@ -167,20 +167,9 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 		}
 	}()
 
-	response, err := cli.ContainerStats(ctx, s.ContainerID, false)
-	if err != nil {
-		log.Printf("collecting stats for %v", err)
-		return
-	}
-	defer response.Body.Close()
-
-	respByte, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Printf("collecting stats for %v", err)
-		return
-	}
 	go func() {
 		for {
+
 			var (
 				previousCPU    uint64
 				previousSystem uint64
@@ -192,9 +181,21 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 				pidsStatsCurrent       uint64
 			)
 
-			err := json.Unmarshal(respByte, &statsJSON)
+			response, err := cli.ContainerStats(ctx, s.ContainerID, false)
 			if err != nil {
-				log.Println(err)
+				log.Printf("collecting stats for %v", err)
+				return
+			}
+
+			respByte, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				log.Printf("collecting stats for %v", err)
+				return
+			}
+
+			errUnmarshal := json.Unmarshal(respByte, &statsJSON)
+			if errUnmarshal != nil {
+				log.Printf("Unmarshal collecting stats for %v", err)
 				return
 			}
 
@@ -208,8 +209,6 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			pidsStatsCurrent = statsJSON.PidsStats.Current
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-			//
-			s := &HumanizeStats{}
 			s.Name = statsJSON.Name[1:]
 			s.ContainerID = statsJSON.ID
 			s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
@@ -224,11 +223,13 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			u <- nil
+			response.Body.Close()
+			time.Sleep(time.Second * 15)
 		}
 	}()
 	for {
 		select {
-		case <-time.After(3 * time.Second):
+		case <-time.After(25 * time.Second):
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			s.SetErrorAndReset(errors.New("timeout waiting for stats"))
