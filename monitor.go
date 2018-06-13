@@ -1,23 +1,33 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"context"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"math"
-	"net/http"
-	"runtime"
+"bufio"
+"bytes"
+"context"
+"fmt"
+"io"
+"io/ioutil"
+"log"
+"math"
+"net/http"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	"github.com/gin-gonic/gin"
-	"github.com/luoyunpeng/monitor/host"
-	"github.com/luoyunpeng/monitor/tool"
-	"github.com/pkg/errors"
+
+
+
+
+
+
+
+
+
+"github.com/docker/docker/api/types"
+"github.com/docker/docker/client"
+"github.com/gin-gonic/gin"
+"github.com/luoyunpeng/monitor/common"
+"github.com/luoyunpeng/monitor/container"
+"github.com/luoyunpeng/monitor/host"
+"github.com/pkg/errors"
+
 )
 
 var (
@@ -33,7 +43,7 @@ type DockerClientPool struct {
 
 func init() {
 	var err error
-	dockerCli, err = initClient()
+	dockerCli, err = common.InitClient(hostURL)
 	if err != nil {
 		panic(err)
 	}
@@ -47,28 +57,14 @@ func main() {
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
-	// By default it serves on :8080
-	//go keepStatsContainer()
-	router.Run()
-}
-
-func initClient() (*client.Client, error) {
-	var (
-		err error
-		cli *client.Client
-	)
-	if runtime.GOOS == "windows" {
-		log.Println("[ monitor ]  init docker client from given host")
-		cli, err = client.NewClientWithOpts(client.WithHost(hostURL))
-	} else {
-		cli, err = client.NewClientWithOpts(client.FromEnv)
-		log.Println("[ monitor ]  init docker client from env")
-	}
-
+	cli, err := common.InitClient(hostURL)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return cli, err
+	go container.KeepStats(cli)
+
+	// By default it serves on :8080
+	router.Run()
 }
 
 func ContainerStats(ctx *gin.Context) {
@@ -91,7 +87,7 @@ func ContainerStats(ctx *gin.Context) {
 		return
 	}
 
-	hstats, err := tool.Collect(respByte)
+	hstats, err := container.Collect(respByte)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err)
 		return
@@ -177,7 +173,7 @@ func ContainersID() ([]string, error) {
 	return ids, nil
 }
 
-func internalStats(ids []string) ([]tool.HumanizeStats, error) {
+func internalStats(ids []string) ([]container.HumanizeStats, error) {
 	if len(ids) == 0 {
 		log.Println("container id or name must given")
 		return nil, errors.New("container id or name must given")
@@ -197,7 +193,7 @@ func internalStats(ids []string) ([]tool.HumanizeStats, error) {
 				return
 			}
 
-			hstats, err := tool.Collect(respByte)
+			hstats, err := container.Collect(respByte)
 			if err != nil {
 				log.Println(err)
 				return

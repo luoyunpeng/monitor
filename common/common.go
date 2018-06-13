@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 )
 
 // ReadLines reads contents from a file and splits them by new lines.
