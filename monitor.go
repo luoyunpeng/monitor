@@ -4,10 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"math"
 	"net/http"
 
@@ -17,19 +14,12 @@ import (
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
 	"github.com/luoyunpeng/monitor/host"
-	"github.com/pkg/errors"
 )
 
 var (
 	hostURL   = "tcp://ip:2375"
 	dockerCli *client.Client
 )
-
-//change to sync.Pool ??
-type DockerClientPool struct {
-	min      int
-	initSize int
-}
 
 func init() {
 	var err error
@@ -168,35 +158,4 @@ func ContainersID() ([]string, error) {
 	}
 
 	return ids, nil
-}
-
-func internalStats(ids []string) ([]container.HumanizeStats, error) {
-	if len(ids) == 0 {
-		log.Println("container id or name must given")
-		return nil, errors.New("container id or name must given")
-	}
-
-	for _, id := range ids {
-		go func(id string) {
-			resp, err := dockerCli.ContainerStats(context.Background(), id, false)
-			if err != nil {
-
-			}
-			defer resp.Body.Close()
-
-			respByte, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			hstats, err := container.Collect(respByte)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			fmt.Println(hstats)
-		}(id)
-	}
-	return nil, nil
 }

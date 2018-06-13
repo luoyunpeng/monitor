@@ -131,7 +131,7 @@ func KeepStats(dockerCli *client.Client) {
 		ccstats := []HumanizeStats{}
 		BufferedCStats.mu.Lock()
 		for _, c := range BufferedCStats.cs {
-			ccstats = append(ccstats, c.GetStatistics())
+			ccstats = append(ccstats, *c.GetStatistics())
 		}
 		BufferedCStats.mu.Unlock()
 		logger.Println(ccstats)
