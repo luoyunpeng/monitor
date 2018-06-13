@@ -1,33 +1,23 @@
 package main
 
 import (
-"bufio"
-"bytes"
-"context"
-"fmt"
-"io"
-"io/ioutil"
-"log"
-"math"
-"net/http"
+	"bufio"
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"math"
+	"net/http"
 
-
-
-
-
-
-
-
-
-
-"github.com/docker/docker/api/types"
-"github.com/docker/docker/client"
-"github.com/gin-gonic/gin"
-"github.com/luoyunpeng/monitor/common"
-"github.com/luoyunpeng/monitor/container"
-"github.com/luoyunpeng/monitor/host"
-"github.com/pkg/errors"
-
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
+	"github.com/gin-gonic/gin"
+	"github.com/luoyunpeng/monitor/common"
+	"github.com/luoyunpeng/monitor/container"
+	"github.com/luoyunpeng/monitor/host"
+	"github.com/pkg/errors"
 )
 
 var (
