@@ -201,7 +201,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 			errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 			if errUnmarshal != nil {
-				log.Printf("Unmarshal collecting stats for %v", err)
+				log.Printf("Unmarshal collecting stats for %v", errUnmarshal)
 				return
 			}
 
@@ -216,7 +216,6 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 			s.Name = statsJSON.Name[1:]
-			s.ContainerID = statsJSON.ID[:12]
 			s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
 			s.Memory = mem
 			s.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
