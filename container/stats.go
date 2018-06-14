@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,8 +158,9 @@ func KeepStats(dockerCli *client.Client) {
 
 func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync.WaitGroup) {
 	var (
-		getFirst bool
-		u        = make(chan error, 1)
+		getFirst   bool
+		u          = make(chan error, 1)
+		errNoSuchC = errors.New("no such container")
 	)
 
 	defer func() {
@@ -171,7 +173,6 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 	go func() {
 		for {
-
 			var (
 				previousCPU    uint64
 				previousSystem uint64
@@ -186,6 +187,9 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			response, err := cli.ContainerStats(ctx, s.ContainerID, false)
 			if err != nil {
 				log.Printf("collecting stats for %v", err)
+				if strings.Contains(err.Error(), "No such container") {
+					u <- errNoSuchC
+				}
 				return
 			}
 
@@ -212,7 +216,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 			s.Name = statsJSON.Name[1:]
-			s.ContainerID = statsJSON.ID
+			s.ContainerID = statsJSON.ID[:12]
 			s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
 			s.Memory = mem
 			s.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
@@ -229,6 +233,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			time.Sleep(time.Second * 15)
 		}
 	}()
+
 	for {
 		select {
 		case <-time.After(25 * time.Second):
@@ -242,7 +247,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			}
 		case err := <-u:
 			s.SetError(err)
-			if err == io.EOF {
+			if err == io.EOF || err == errNoSuchC {
 				break
 			}
 			if err != nil {
