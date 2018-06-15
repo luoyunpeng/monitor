@@ -132,6 +132,7 @@ type HumanizeStats struct {
 	IsInvalid bool
 }
 
+// Deprecated: use Collect(respByte []byte)
 func Set(response types.ContainerStats) (s *HumanizeStats) {
 	var (
 		previousCPU    uint64

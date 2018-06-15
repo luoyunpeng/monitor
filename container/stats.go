@@ -151,7 +151,7 @@ func KeepStats(dockerCli *client.Client) {
 				}
 			}
 		default:
-			// just skip
+			// just skip, wait for next log output
 		}
 	}
 }
@@ -172,7 +172,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 	}()
 
 	go func() {
-		for {
+		for range time.Tick(time.Second * 15) {
 			var (
 				previousCPU    uint64
 				previousSystem uint64
@@ -229,7 +229,6 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			u <- nil
 			response.Body.Close()
-			time.Sleep(time.Second * 15)
 		}
 	}()
 
