@@ -209,6 +209,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			previousSystem = statsJSON.PreCPUStats.SystemUsage
 			cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
 			blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
+			// change mem related metric to MB
 			mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats) / (1024 * 1024)
 			memLimit = float64(statsJSON.MemoryStats.Limit) / (1024 * 1024)
 			memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)

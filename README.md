@@ -13,3 +13,10 @@ Build a linux binary
 ```
 $ go build -tags=jsoniter monitor.go
 ```
+
+Or
+
+```
+chmod +x build.sh
+sh build.sh
+```
