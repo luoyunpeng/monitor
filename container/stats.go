@@ -183,9 +183,9 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			)
 
 			response, err := cli.ContainerStats(ctx, s.ContainerID, false)
-			if err != nil {
+			if err != nil || s == nil {
 				log.Printf("collecting stats for %v", err)
-				if strings.Contains(err.Error(), "No such container") {
+				if strings.Contains(err.Error(), "No such container") || s == nil {
 					u <- errNoSuchC
 				}
 				return
