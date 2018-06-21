@@ -193,6 +193,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 			// bool value initial value is false
 			if s.IsInvalid {
+				log.Println(s.Name, " is not running, stop collecting in goroutine")
 				response.Body.Close()
 				u <- errNoSuchC
 				return
@@ -251,9 +252,14 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			}
 		case err := <-u:
 			s.SetError(err)
-			if err == io.EOF || err == errNoSuchC {
+			if err == io.EOF {
 				break
 			}
+			if err == errNoSuchC {
+				log.Println(s.Name, " is not running, return")
+				return
+			}
+
 			if err != nil {
 				continue
 			}
