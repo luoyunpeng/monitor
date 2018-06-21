@@ -35,6 +35,7 @@ func (s *stats) add(cs *CStats) bool {
 func (s *stats) remove(id string) {
 	s.mu.Lock()
 	if i, exists := s.isKnownContainer(id); exists {
+		s.cs[i] = nil
 		s.cs = append(s.cs[:i], s.cs[i+1:]...)
 	}
 	s.mu.Unlock()

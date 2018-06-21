@@ -23,7 +23,7 @@ var (
 	BufferedCStats = &stats{}
 )
 
-type statsOptions struct {
+type StatsOptions struct {
 	all        bool
 	noStream   bool
 	noTrunc    bool
@@ -42,7 +42,6 @@ func init() {
 
 func KeepStats(dockerCli *client.Client) {
 	closeChan := make(chan error)
-	opts := &statsOptions{}
 
 	ctx := context.Background()
 	// monitorContainerEvents watches for container creation and removal (only
@@ -79,7 +78,7 @@ func KeepStats(dockerCli *client.Client) {
 	// containers (only used when calling `docker stats` without arguments).
 	getContainerList := func() {
 		options := types.ContainerListOptions{
-			All: opts.all,
+			All: false,
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
@@ -110,15 +109,14 @@ func KeepStats(dockerCli *client.Client) {
 	})
 
 	eh.Handle("die", func(e events.Message) {
-		if !opts.all {
-			BufferedCStats.remove(e.ID[:12])
-		}
+		BufferedCStats.remove(e.ID[:12])
 	})
 
 	eventChan := make(chan events.Message)
 	go eh.Watch(eventChan)
 	go monitorContainerEvents(started, eventChan)
 	defer close(eventChan)
+	// wait event listener go routine started
 	<-started
 
 	// Start a short-lived goroutine to retrieve the initial list of
