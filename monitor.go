@@ -104,7 +104,7 @@ func ContainerLogs(ctx *gin.Context) {
 	bufferLogString := bytes.NewBufferString("")
 	respRead, err := dockerCli.ContainerLogs(context.Background(), id, logOptions)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err)
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 	defer respRead.Close()
