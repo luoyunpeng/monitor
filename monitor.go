@@ -87,7 +87,7 @@ func ContainerLogs(ctx *gin.Context) {
 	id := ctx.Param("id")
 	size := ctx.DefaultQuery("size", "500")
 	_, err := strconv.Atoi(size)
-	if size != "all" || err != nil {
+	if size != "all" && err != nil {
 		size = "500"
 	}
 
