@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -34,7 +35,7 @@ func main() {
 	v1 := router.Group("")
 
 	v1.GET("/container/stats/:id", ContainerStats)
-	v1.GET("/container/logs/:id", ContainerLogs)
+	v1.GET("/container/logs/:id/*size", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
 	cli, err := common.InitClient(hostURL)
@@ -83,10 +84,11 @@ func ContainerStats(ctx *gin.Context) {
 }
 
 func ContainerLogs(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	size := ctx.Params.ByName("size")
-	if size == "" {
-		size = "all"
+	id := ctx.Param("id")
+	size := ctx.DefaultQuery("size", "500")
+	_, err := strconv.Atoi(size)
+	if size != "all" || err != nil {
+		size = "500"
 	}
 
 	logOptions := types.ContainerLogsOptions{
