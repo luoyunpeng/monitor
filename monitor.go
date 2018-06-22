@@ -35,7 +35,7 @@ func main() {
 	v1 := router.Group("")
 
 	v1.GET("/container/stats/:id", ContainerStats)
-	v1.GET("/container/logs/:id/*size", ContainerLogs)
+	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
 	cli, err := common.InitClient(hostURL)
