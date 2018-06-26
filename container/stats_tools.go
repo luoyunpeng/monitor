@@ -18,15 +18,16 @@ var (
 )
 
 type stats struct {
-	mu sync.Mutex
-	cs []*CStats
+	mu sync.RWMutex
+	csFMetrics []*ContainerFMetrics
 }
 
-func (s *stats) add(cs *CStats) bool {
+func (s *stats) add(cfm *ContainerFMetrics) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.isKnownContainer(cs.ContainerID); !exists {
-		s.cs = append(s.cs, cs)
+
+	if _, exists := s.isKnownContainer(cfm.ContainerID); !exists {
+		s.csFMetrics = append(s.csFMetrics, cfm)
 		return true
 	}
 	return false
@@ -34,15 +35,20 @@ func (s *stats) add(cs *CStats) bool {
 
 func (s *stats) remove(id string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if i, exists := s.isKnownContainer(id); exists {
-		s.cs[i].GetStatistics().IsInvalid = true
-		s.cs = append(s.cs[:i], s.cs[i+1:]...)
+		// set the container metric to invalid for stopping the collector
+		s.csFMetrics[i].IsInvalid = true
+		s.csFMetrics = append(s.csFMetrics[:i], s.csFMetrics[i+1:]...)
 	}
-	s.mu.Unlock()
 }
 
 func (s *stats) isKnownContainer(cid string) (int, bool) {
-	for i, c := range s.cs {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for i, c := range s.csFMetrics {
 		if c.ContainerID == cid || c.Name == cid {
 			return i, true
 		}
@@ -50,10 +56,11 @@ func (s *stats) isKnownContainer(cid string) (int, bool) {
 	return -1, false
 }
 
+/*
 // ContainerStats represents an entity to store containers statistics synchronously
 type CStats struct {
 	mutex sync.Mutex
-	HumanizeStats
+	HumanizeMetrics
 	err error
 }
 
@@ -94,26 +101,27 @@ func (cs *CStats) SetError(err error) {
 }
 
 // SetStatistics set the container statistics
-func (cs *CStats) SetStatistics(s HumanizeStats) {
+func (cs *CStats) SetStatistics(s HumanizeMetrics) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	s.ContainerID = cs.ContainerID
-	cs.HumanizeStats = s
+	cs.HumanizeMetrics = s
 }
 
 // GetStatistics returns container statistics with other meta data such as the container name
-func (cs *CStats) GetStatistics() *HumanizeStats {
+func (cs *CStats) GetStatistics() *HumanizeMetrics {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	return &cs.HumanizeStats
+	return &cs.HumanizeMetrics
 }
+*/
 
 // NewContainerStats returns a new ContainerStats entity and sets in it the given name
-func NewContainerStats(containerID string) *CStats {
-	return &CStats{HumanizeStats: HumanizeStats{ContainerID: containerID}}
+func NewContainerStats(containerID string) *ContainerFMetrics {
+	return &ContainerFMetrics{ContainerID: containerID}
 }
 
-type HumanizeStats struct {
+type ContainerFMetrics struct {
 	ContainerID      string
 	Name             string
 	CPUPercentage    float64
@@ -134,7 +142,7 @@ type HumanizeStats struct {
 }
 
 // Deprecated: use Collect(respByte []byte)
-func Set(response types.ContainerStats) (s *HumanizeStats) {
+func Set(response types.ContainerStats) (s *ContainerFMetrics) {
 	var (
 		previousCPU    uint64
 		previousSystem uint64
@@ -183,7 +191,7 @@ func Set(response types.ContainerStats) (s *HumanizeStats) {
 	return
 }
 
-func Collect(respByte []byte) (*HumanizeStats, error) {
+func Parse(respByte []byte) (*ContainerFMetrics, error) {
 	var (
 		previousCPU    uint64
 		previousSystem uint64
@@ -211,7 +219,7 @@ func Collect(respByte []byte) (*HumanizeStats, error) {
 	netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 	//
-	s := &HumanizeStats{}
+	s := &ContainerFMetrics{}
 	s.Name = statsJSON.Name[1:]
 	s.ContainerID = statsJSON.ID
 	s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2

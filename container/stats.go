@@ -19,28 +19,19 @@ import (
 )
 
 var (
-	logger         *log.Logger
 	BufferedCStats = &stats{}
 )
 
-type StatsOptions struct {
-	all        bool
-	noStream   bool
-	noTrunc    bool
-	format     string
-	containers []string
-}
-
-func init() {
-	file, err := os.OpenFile("container.monitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+func initLog(ip string) *log.Logger {
+	file, err := os.OpenFile(ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalln("Failed to open error log file:", err)
 	}
 
-	logger = log.New(file, "[MONITOR STATS]: **** ", log.Ldate|log.Ltime|log.Lshortfile)
+	return log.New(file, ip+" log: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func KeepStats(dockerCli *client.Client) {
+func KeepStats(dockerCli *client.Client, ip string) {
 	closeChan := make(chan error)
 
 	ctx := context.Background()
@@ -76,6 +67,7 @@ func KeepStats(dockerCli *client.Client) {
 
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
+	logger := initLog(ip)
 	getContainerList := func() {
 		options := types.ContainerListOptions{
 			All: false,
@@ -88,7 +80,7 @@ func KeepStats(dockerCli *client.Client) {
 			s := NewContainerStats(container.ID[:12])
 			if BufferedCStats.add(s) {
 				waitFirst.Add(1)
-				go collect(ctx, s, dockerCli, waitFirst)
+				go collect(ctx, s, dockerCli, waitFirst, logger)
 			}
 		}
 	}
@@ -101,21 +93,27 @@ func KeepStats(dockerCli *client.Client) {
 	eh := InitEventHandler()
 
 	eh.Handle("start", func(e events.Message) {
+		logger.Println("event handler: received start event: %v", e)
 		s := NewContainerStats(e.ID[:12])
 		if BufferedCStats.add(s) {
 			waitFirst.Add(1)
-			go collect(ctx, s, dockerCli, waitFirst)
+			go collect(ctx, s, dockerCli, waitFirst, logger)
 		}
 	})
 
 	eh.Handle("die", func(e events.Message) {
+		logger.Println("event handler: received die event: %v", e)
 		BufferedCStats.remove(e.ID[:12])
 	})
 
 	eventChan := make(chan events.Message)
 	go eh.Watch(eventChan)
 	go monitorContainerEvents(started, eventChan)
-	defer close(eventChan)
+	defer func() {
+		close(eventChan)
+		close(closeChan)
+		dockerCli.Close()
+	}()
 	// wait event listener go routine started
 	<-started
 
@@ -124,17 +122,7 @@ func KeepStats(dockerCli *client.Client) {
 	getContainerList()
 	waitFirst.Wait()
 
-	logger.Println("log all running container stats every 4 seconds")
-	//record cStats to log files
-	for range time.Tick(time.Second * 15) {
-		ccstats := []HumanizeStats{}
-		BufferedCStats.mu.Lock()
-		for _, c := range BufferedCStats.cs {
-			ccstats = append(ccstats, *c.GetStatistics())
-		}
-		BufferedCStats.mu.Unlock()
-		logger.Println(ccstats)
-
+	for {
 		select {
 		case err, ok := <-closeChan:
 			if ok {
@@ -149,12 +137,12 @@ func KeepStats(dockerCli *client.Client) {
 				}
 			}
 		default:
-			// just skip, wait for next log output
+			time.Sleep(15 * time.Second)
 		}
 	}
 }
 
-func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync.WaitGroup) {
+func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
 	var (
 		getFirst   bool
 		u          = make(chan error, 1)
@@ -170,7 +158,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 	}()
 
 	go func() {
-		for range time.Tick(time.Second * 15) {
+		for {
 			var (
 				previousCPU    uint64
 				previousSystem uint64
@@ -184,7 +172,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 			response, err := cli.ContainerStats(ctx, s.ContainerID, false)
 			if err != nil {
-				log.Printf("collecting stats for %v", err)
+				logger.Printf("collecting stats for %v", err)
 				if strings.Contains(err.Error(), "No such container") {
 					u <- errNoSuchC
 				}
@@ -193,7 +181,7 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 			// bool value initial value is false
 			if s.IsInvalid {
-				log.Println(s.Name, " is not running, stop collecting in goroutine")
+				logger.Println(s.Name, " is not running, stop collecting in goroutine")
 				response.Body.Close()
 				u <- errNoSuchC
 				return
@@ -201,13 +189,13 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 
 			respByte, err := ioutil.ReadAll(response.Body)
 			if err != nil {
-				log.Printf("collecting stats for %v", err)
+				logger.Printf("collecting stats for %v", err)
 				return
 			}
 
 			errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 			if errUnmarshal != nil {
-				log.Printf("Unmarshal collecting stats for %v", errUnmarshal)
+				logger.Printf("Unmarshal collecting stats for %v", errUnmarshal)
 				return
 			}
 
@@ -236,6 +224,8 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 			s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			u <- nil
 			response.Body.Close()
+			logger.Println(s.ContainerID, s.Name, s.CPUPercentage, s.Memory, s.MemoryLimit, s.MemoryPercentage, s.NetworkRx, s.NetworkTx, s.BlockRead, s.BlockWrite)
+			time.Sleep(15 * time.Second)
 		}
 	}()
 
@@ -244,19 +234,19 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 		case <-time.After(25 * time.Second):
 			// zero out the values if we have not received an update within
 			// the specified duration.
-			s.SetErrorAndReset(errors.New("timeout waiting for stats"))
+			//s.SetErrorAndReset(errors.New("timeout waiting for stats"))
 			// if this is the first stat you get, release WaitGroup
 			if !getFirst {
 				getFirst = true
 				waitFirst.Done()
 			}
 		case err := <-u:
-			s.SetError(err)
+			//s.SetError(err)
 			if err == io.EOF {
 				break
 			}
 			if err == errNoSuchC {
-				log.Println(s.Name, " is not running, return")
+				logger.Println(s.Name, " is not running, return")
 				return
 			}
 
@@ -272,8 +262,8 @@ func collect(ctx context.Context, s *CStats, cli *client.Client, waitFirst *sync
 	}
 }
 
-func Getstatics(id string) (*HumanizeStats, error) {
-	if len(BufferedCStats.cs) == 0 {
+func Getstatics(id string) (*ContainerFMetrics, error) {
+	if len(BufferedCStats.csFMetrics) == 0 {
 		return nil, errors.New("no container stats")
 	}
 
@@ -285,5 +275,5 @@ func Getstatics(id string) (*HumanizeStats, error) {
 		return nil, errors.New("given container name or id is unknown, or container is not running")
 	}
 
-	return BufferedCStats.cs[index].GetStatistics(), nil
+	return BufferedCStats.csFMetrics[index], nil
 }

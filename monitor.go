@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -18,13 +19,13 @@ import (
 )
 
 var (
-	hostURL   = "tcp://ip:2375"
 	dockerCli *client.Client
+	hostsIPs  = []string{"localhost"}
 )
 
 func init() {
 	var err error
-	dockerCli, err = common.InitClient(hostURL)
+	dockerCli, err = common.InitClient("localhost")
 	if err != nil {
 		panic(err)
 	}
@@ -38,11 +39,20 @@ func main() {
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
-	cli, err := common.InitClient(hostURL)
-	if err != nil {
-		panic(err)
-	}
-	go container.KeepStats(cli)
+	go func() {
+		for _, ip := range hostsIPs {
+			if ip == "localhost" {
+				go container.KeepStats(dockerCli, ip)
+			} else {
+				cli, err := common.InitClient(ip)
+				if err != nil {
+					log.Println("connect to ", ip, " err :", err)
+					continue
+				}
+				go container.KeepStats(cli, ip)
+			}
+		}
+	}()
 
 	// By default it serves on :8080
 	router.Run()

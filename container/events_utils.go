@@ -3,7 +3,6 @@ package container
 import (
 	"sync"
 
-	"log"
 	eventtypes "github.com/docker/docker/api/types/events"
 )
 
@@ -41,7 +40,6 @@ func (w *eventHandler) Watch(c <-chan eventtypes.Message) {
 		if !exists {
 			continue
 		}
-		log.Printf("event handler: received event: %v", e)
 		go h(e)
 	}
 }

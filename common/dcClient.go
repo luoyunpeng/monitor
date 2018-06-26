@@ -3,23 +3,24 @@ package common
 import (
 	"github.com/docker/docker/client"
 	"log"
-	"runtime"
+	"strings"
 )
 
-func InitClient(hostURL string) (*client.Client, error) {
+var (
+	hostURL = "tcp://ip:2375"
+)
+
+func InitClient(ip string) (*client.Client, error) {
 	var (
 		err error
 		cli *client.Client
 	)
-	if runtime.GOOS == "windows" {
-		log.Println("[ monitor ]  init docker client from given host")
-		if len(hostURL) == 0 {
-			log.Fatal("on windows env hostURl must given")
-		}
-		cli, err = client.NewClientWithOpts(client.WithHost(hostURL))
-	} else {
+	if ip == "localhost" {
 		cli, err = client.NewClientWithOpts(client.FromEnv)
-		log.Println("[ monitor ]  init docker client from env")
+		log.Println("[ monitor ]  init docker client from env for localhost")
+	} else {
+		cli, err = client.NewClientWithOpts(client.WithHost(strings.Replace(hostURL, "ip", ip, 1)))
+		log.Println("[ monitor ]  init docker client from remote ip: ", ip)
 	}
 
 	if err != nil {
