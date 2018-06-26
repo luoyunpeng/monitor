@@ -68,6 +68,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
 	logger := initLog(ip)
+	logger.Println("CONTAINER ID        NAME                CPU %               MEM USAGE / LIMIT     MEM %               NET I/O             BLOCK I/O ")
 	getContainerList := func() {
 		options := types.ContainerListOptions{
 			All: false,
@@ -271,6 +272,8 @@ func Getstatics(id string) (*ContainerFMetrics, error) {
 		index   int
 		isKnown bool
 	)
+	BufferedCStats.mu.RLock()
+	defer BufferedCStats.mu.RUnlock()
 	if index, isKnown = BufferedCStats.isKnownContainer(id); !isKnown {
 		return nil, errors.New("given container name or id is unknown, or container is not running")
 	}

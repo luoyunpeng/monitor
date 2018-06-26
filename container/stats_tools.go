@@ -45,9 +45,6 @@ func (s *stats) remove(id string) {
 }
 
 func (s *stats) isKnownContainer(cid string) (int, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	for i, c := range s.csFMetrics {
 		if c.ContainerID == cid || c.Name == cid {
 			return i, true
