@@ -17,61 +17,110 @@ var (
 	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
-type stats struct {
+type hostContainerMStack struct {
 	mu sync.RWMutex
 	//indicate which host this stats belong to
-	host       string
-	csFMetrics []*ContainerFMetrics
+	hostName string
+	cms      []*containerMetricStack
 }
 
-func (s *stats) add(cfm *ContainerFMetrics) bool {
+func NewHostCMStack(host string) *hostContainerMStack {
+	return &hostContainerMStack{hostName: host}
+}
+
+func (s *hostContainerMStack) add(newCms *containerMetricStack) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.isKnownContainer(cfm.ContainerID); !exists {
-		s.csFMetrics = append(s.csFMetrics, cfm)
+	if _, exists := s.isKnownContainer(newCms.id); !exists {
+		s.cms = append(s.cms, newCms)
 		return true
 	}
 	return false
 }
 
-func (s *stats) remove(id string) {
+func (s *hostContainerMStack) remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if i, exists := s.isKnownContainer(id); exists {
-		// set the container metric to invalid for stopping the collector
-		s.csFMetrics[i].IsInvalid = true
-		s.csFMetrics = append(s.csFMetrics[:i], s.csFMetrics[i+1:]...)
+		// set the container metric to invalid for stopping the collector, also rm container metrics stack
+		s.cms[i].isInvalid = true
+		s.cms = append(s.cms[:i], s.cms[i+1:]...)
 	}
 }
 
-func (s *stats) isKnownContainer(cid string) (int, bool) {
-	for i, c := range s.csFMetrics {
-		if c.ContainerID == cid || c.Name == cid {
+func (s *hostContainerMStack) isKnownContainer(cid string) (int, bool) {
+	for i, c := range s.cms {
+		if c.id == cid || c.name == cid {
 			return i, true
 		}
 	}
 	return -1, false
 }
 
-func (s *stats) length() int {
+func (s *hostContainerMStack) length() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return len(s.csFMetrics)
+	return len(s.cms)
 }
 
-func (s *stats) allNames() []string {
+func (s *hostContainerMStack) allNames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	names := []string{}
-	for _, cm := range s.csFMetrics {
-		names = append(names, cm.Name)
+	for _, cm := range s.cms {
+		names = append(names, cm.name)
 	}
 
 	return names
+}
+
+type containerMetricStack struct {
+	mu sync.RWMutex
+
+	id   string
+	name string
+
+	csFMetrics []*ContainerFMetrics
+
+	isInvalid bool
+}
+
+func NewContainerMStack(name, id string) *containerMetricStack {
+	return &containerMetricStack{name: name, id: id}
+}
+
+func (cms *containerMetricStack) put(cfm *ContainerFMetrics) bool {
+	cms.mu.Lock()
+	defer cms.mu.Unlock()
+
+	if len(cms.csFMetrics) == 15 {
+		//cms.csFMetrics = append(cms.csFMetrics, cfm)
+		//delete the first one also the oldest one, and append the latest one
+		cms.csFMetrics = append(cms.csFMetrics[1:], cfm)
+		return true
+	}
+	return false
+}
+
+func (cms *containerMetricStack) read(num int) []*ContainerFMetrics {
+	cms.mu.RLock()
+	defer cms.mu.RUnlock()
+
+	if len(cms.csFMetrics) == 0 {
+		return nil
+	}
+	return cms.csFMetrics[:num]
+}
+
+func (cms *containerMetricStack) length() int {
+	cms.mu.RLock()
+	defer cms.mu.RUnlock()
+
+	return len(cms.csFMetrics)
 }
 
 /*
@@ -155,8 +204,6 @@ type ContainerFMetrics struct {
 	//time
 	ReadTime    string
 	PreReadTime string
-
-	IsInvalid bool
 }
 
 // Deprecated: use Collect(respByte []byte)

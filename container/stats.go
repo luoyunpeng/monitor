@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	BufferedCStats = &stats{}
+	allHostStack []*hostContainerMStack
+	mu           sync.RWMutex
 )
 
 func initLog(ip string) *log.Logger {
@@ -28,7 +29,7 @@ func initLog(ip string) *log.Logger {
 		log.Fatalln("Failed to open error log file:", err)
 	}
 
-	return log.New(file, "", log.Ldate|log.Ltime|log.Lshortfile)
+	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
 func KeepStats(dockerCli *client.Client, ip string) {
@@ -68,7 +69,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
 	logger := initLog(ip)
-	logger.Println("CONTAINER ID        NAME                CPU %               MEM USAGE / LIMIT     MEM %               NET I/O             BLOCK I/O ")
+	hcmsStack := NewHostCMStack(ip)
+	addToAllHostStack(hcmsStack)
+	//allHostStack = append(allHostStack, hcmsStack)
+	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O ")
 	getContainerList := func() {
 		options := types.ContainerListOptions{
 			All: false,
@@ -78,10 +82,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			closeChan <- err
 		}
 		for _, container := range cs {
-			s := NewContainerStats(container.ID[:12])
-			if BufferedCStats.add(s) {
+			cms := NewContainerMStack("", container.ID[:12])
+			if hcmsStack.add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, s, dockerCli, waitFirst, logger)
+				go collect(ctx, cms, dockerCli, waitFirst, logger)
 			}
 		}
 	}
@@ -92,19 +96,18 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// would "miss" a creation.
 	started := make(chan struct{})
 	eh := InitEventHandler()
-
 	eh.Handle("start", func(e events.Message) {
 		logger.Println("event handler: received start event: %v", e)
-		s := NewContainerStats(e.ID[:12])
-		if BufferedCStats.add(s) {
+		cms := NewContainerMStack("", e.ID[:12])
+		if hcmsStack.add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, s, dockerCli, waitFirst, logger)
+			go collect(ctx, cms, dockerCli, waitFirst, logger)
 		}
 	})
 
 	eh.Handle("die", func(e events.Message) {
 		logger.Println("event handler: received die event: %v", e)
-		BufferedCStats.remove(e.ID[:12])
+		hcmsStack.remove(e.ID[:12])
 	})
 
 	eventChan := make(chan events.Message)
@@ -143,11 +146,12 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	}
 }
 
-func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
+func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
 	var (
 		getFirst   bool
 		u          = make(chan error, 1)
 		errNoSuchC = errors.New("no such container")
+		cfm        *ContainerFMetrics
 	)
 
 	defer func() {
@@ -171,7 +175,7 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 				pidsStatsCurrent       uint64
 			)
 
-			response, err := cli.ContainerStats(ctx, s.ContainerID, false)
+			response, err := cli.ContainerStats(ctx, cms.id, false)
 			if err != nil {
 				logger.Printf("collecting stats for %v", err)
 				if strings.Contains(err.Error(), "No such container") {
@@ -181,8 +185,8 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 			}
 
 			// bool value initial value is false
-			if s.IsInvalid {
-				logger.Println(s.Name, " is not running, stop collecting in goroutine")
+			if cms.isInvalid {
+				logger.Println(cms.name, " is not running, stop collecting in goroutine")
 				response.Body.Close()
 				u <- errNoSuchC
 				return
@@ -211,21 +215,26 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 			pidsStatsCurrent = statsJSON.PidsStats.Current
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-			s.Name = statsJSON.Name[1:]
-			s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
-			s.Memory = mem
-			s.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
-			s.MemoryLimit = memLimit
-			s.NetworkRx = netRx
-			s.NetworkTx = netTx
-			s.BlockRead = float64(blkRead)
-			s.BlockWrite = float64(blkWrite)
-			s.PidsCurrent = pidsStatsCurrent
-			s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-			s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+			cfm = NewContainerStats(cms.id)
+			cfm.Name = statsJSON.Name[1:]
+			if cms.name != "" {
+				cms.name = cfm.Name
+			}
+			cfm.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
+			cfm.Memory = mem
+			cfm.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
+			cfm.MemoryLimit = memLimit
+			cfm.NetworkRx = netRx
+			cfm.NetworkTx = netTx
+			cfm.BlockRead = float64(blkRead)
+			cfm.BlockWrite = float64(blkWrite)
+			cfm.PidsCurrent = pidsStatsCurrent
+			cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+			cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+			cms.put(cfm)
 			u <- nil
 			response.Body.Close()
-			logger.Println(s.ContainerID, s.Name, s.CPUPercentage, s.Memory, s.MemoryLimit, s.MemoryPercentage, s.NetworkRx, s.NetworkTx, s.BlockRead, s.BlockWrite)
+			logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite)
 			time.Sleep(15 * time.Second)
 		}
 	}()
@@ -247,7 +256,7 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 				break
 			}
 			if err == errNoSuchC {
-				logger.Println(s.Name, " is not running, return")
+				logger.Println(cms.name, " is not running, return")
 				return
 			}
 
@@ -264,28 +273,43 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 	}
 }
 
-func GetContainerMetrics(id string) (*ContainerFMetrics, error) {
-	if len(BufferedCStats.csFMetrics) == 0 {
-		return nil, errors.New("no container stats")
-	}
+func addToAllHostStack(stack *hostContainerMStack) {
+	mu.Lock()
+	defer mu.Unlock()
 
-	var (
-		index   int
-		isKnown bool
-	)
-	BufferedCStats.mu.RLock()
-	defer BufferedCStats.mu.RUnlock()
-	if index, isKnown = BufferedCStats.isKnownContainer(id); !isKnown {
-		return nil, errors.New("given container name or id is unknown, or container is not running")
-	}
-
-	return BufferedCStats.csFMetrics[index], nil
+	allHostStack = append(allHostStack, stack)
 }
 
-func GetCInfo(id string) []string {
-	if len(BufferedCStats.csFMetrics) == 0 {
-		return nil
+func GetContainerMetrics(host, id string) ([]*ContainerFMetrics, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	for _, hoststack := range allHostStack {
+		if hoststack.hostName == host {
+			if hoststack.length() == 0 {
+				return nil, errors.New("not one container is running")
+			}
+			for _, containerStack := range hoststack.cms {
+				if containerStack.id == id || containerStack.name == id {
+					return containerStack.read(5), nil
+				}
+			}
+		}
 	}
 
-	return BufferedCStats.allNames()
+	return nil, errors.New("given container name or id is unknown, or container is not running")
+
+}
+
+func GetCInfo(host string) []string {
+	for _, hoststack := range allHostStack {
+		if hoststack.hostName == host {
+			if hoststack.length() == 0 {
+				return nil
+			}
+			return hoststack.allNames()
+		}
+	}
+
+	return nil
 }

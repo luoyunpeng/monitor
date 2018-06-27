@@ -61,12 +61,24 @@ func main() {
 
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
-	if len(id) == 0 {
-		ctx.JSON(http.StatusNotFound, "container id or name must given")
+	host := ctx.DefaultQuery("host", "")
+	if len(id) == 0 || len(host) == 0 {
+		ctx.JSON(http.StatusNotFound, "container id/name or host must given")
 		return
 	}
 
-	hstats, err := container.GetContainerMetrics(id)
+	isHostKnown := false
+	for _, h := range hostsIPs {
+		if host == h {
+			isHostKnown = true
+		}
+	}
+
+	if !isHostKnown {
+		ctx.JSON(http.StatusNotFound, "nknown host, please try again")
+	}
+
+	hstats, err := container.GetContainerMetrics(host, id)
 	if err != nil {
 		ctx.String(http.StatusNotFound, err.Error())
 		return
