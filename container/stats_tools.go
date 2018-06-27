@@ -103,7 +103,8 @@ func (cms *containerMetricStack) put(cfm *ContainerFMetrics) bool {
 		cms.csFMetrics = append(cms.csFMetrics[1:], cfm)
 		return true
 	}
-	return false
+	cms.csFMetrics = append(cms.csFMetrics, cfm)
+	return true
 }
 
 func (cms *containerMetricStack) read(num int) []*ContainerFMetrics {
@@ -113,7 +114,10 @@ func (cms *containerMetricStack) read(num int) []*ContainerFMetrics {
 	if len(cms.csFMetrics) == 0 {
 		return nil
 	}
-	return cms.csFMetrics[:num]
+	if len(cms.csFMetrics) >= num {
+		return cms.csFMetrics[:num]
+	}
+	return cms.csFMetrics[:len(cms.csFMetrics)]
 }
 
 func (cms *containerMetricStack) length() int {
