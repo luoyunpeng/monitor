@@ -217,7 +217,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 
 			cfm = NewContainerStats(cms.id)
 			cfm.Name = statsJSON.Name[1:]
-			if cms.name != "" {
+			if cms.name == "" {
 				cms.name = cfm.Name
 			}
 			cfm.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
