@@ -28,7 +28,7 @@ func initLog(ip string) *log.Logger {
 		log.Fatalln("Failed to open error log file:", err)
 	}
 
-	return log.New(file, ip+" log: ", log.Ldate|log.Ltime|log.Lshortfile)
+	return log.New(file, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 func KeepStats(dockerCli *client.Client, ip string) {
@@ -260,10 +260,11 @@ func collect(ctx context.Context, s *ContainerFMetrics, cli *client.Client, wait
 				waitFirst.Done()
 			}
 		}
+
 	}
 }
 
-func Getstatics(id string) (*ContainerFMetrics, error) {
+func GetContainerMetrics(id string) (*ContainerFMetrics, error) {
 	if len(BufferedCStats.csFMetrics) == 0 {
 		return nil, errors.New("no container stats")
 	}
@@ -279,4 +280,12 @@ func Getstatics(id string) (*ContainerFMetrics, error) {
 	}
 
 	return BufferedCStats.csFMetrics[index], nil
+}
+
+func GetCInfo(id string) []string {
+	if len(BufferedCStats.csFMetrics) == 0 {
+		return nil
+	}
+
+	return BufferedCStats.allNames()
 }

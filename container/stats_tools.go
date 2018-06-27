@@ -19,6 +19,8 @@ var (
 
 type stats struct {
 	mu sync.RWMutex
+	//indicate which host this stats belong to
+	host       string
 	csFMetrics []*ContainerFMetrics
 }
 
@@ -51,6 +53,25 @@ func (s *stats) isKnownContainer(cid string) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func (s *stats) length() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.csFMetrics)
+}
+
+func (s *stats) allNames() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	names := []string{}
+	for _, cm := range s.csFMetrics {
+		names = append(names, cm.Name)
+	}
+
+	return names
 }
 
 /*

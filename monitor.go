@@ -65,7 +65,7 @@ func ContainerStats(ctx *gin.Context) {
 		return
 	}
 
-	hstats, err := container.Getstatics(id)
+	hstats, err := container.GetContainerMetrics(id)
 	if err != nil {
 		ctx.String(http.StatusNotFound, err.Error())
 		return
@@ -91,6 +91,20 @@ func ContainerStats(ctx *gin.Context) {
 		}
 	*/
 	ctx.JSON(http.StatusOK, hstats)
+}
+
+func ContainerInfo(ctx *gin.Context) {
+	cinfo := struct {
+		Len   int
+		Names []string
+	}{}
+	cinfo.Names = container.GetCInfo("")
+	if cinfo.Names == nil {
+		ctx.JSON(http.StatusNotFound, "stack got no container metrics")
+		return
+	}
+	cinfo.Len = len(cinfo.Names)
+	ctx.JSON(http.StatusOK, cinfo)
 }
 
 func ContainerLogs(ctx *gin.Context) {
