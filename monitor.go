@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
 	"net/http"
+	"runtime"
 	"strconv"
 
 	"github.com/docker/docker/api/types"
@@ -29,6 +31,12 @@ func init() {
 	dockerCli, err = common.InitClient("localhost")
 	if err != nil {
 		panic(err)
+	}
+
+	if runtime.NumCPU() >= 4 {
+		numProces := runtime.NumCPU() / 2
+		runtime.GOMAXPROCS(numProces)
+		fmt.Println("[ monitor ] set max processor to ", numProces)
 	}
 }
 
