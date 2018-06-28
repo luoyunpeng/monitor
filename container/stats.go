@@ -24,6 +24,8 @@ var (
 	mu           sync.RWMutex
 )
 
+const defulatReadLength = 15
+
 func initLog(ip string) *log.Logger {
 	file, err := os.OpenFile(ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -222,7 +224,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			if cms.name == "" {
 				cms.name = cfm.Name
 			}
-			cfm.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
+			cfm.CPUPercentage = math.Trunc(cpuPercent*1e6+0.5) * 1e-6
 			cfm.Memory = mem
 			cfm.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
 			cfm.MemoryLimit = memLimit
@@ -293,7 +295,7 @@ func GetContainerMetrics(host, id string) ([]*ContainerFMetrics, error) {
 			}
 			for _, containerStack := range hoststack.cms {
 				if containerStack.id == id || containerStack.name == id {
-					return containerStack.read(5), nil
+					return containerStack.read(defulatReadLength), nil
 				}
 			}
 		}
