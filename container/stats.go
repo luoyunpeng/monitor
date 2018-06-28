@@ -246,7 +246,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		case <-time.After(25 * time.Second):
 			// zero out the values if we have not received an update within
 			// the specified duration.
-			//s.SetErrorAndReset(errors.New("timeout waiting for stats"))
+			logger.Println("collect for container-"+cms.name, " time out")
 			// if this is the first stat you get, release WaitGroup
 			if !getFirst {
 				getFirst = true
@@ -300,7 +300,6 @@ func GetContainerMetrics(host, id string) ([]*ContainerFMetrics, error) {
 	}
 
 	return nil, errors.New("given container name or id is unknown, or container is not running")
-
 }
 
 func GetCInfo(host string) []string {
