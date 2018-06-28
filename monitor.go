@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
 	"net/http"
+	"runtime"
 	"strconv"
 
 	"github.com/docker/docker/api/types"
@@ -30,6 +32,12 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	if runtime.NumCPU() >= 4 {
+		numProces := runtime.NumCPU() / 2
+		runtime.GOMAXPROCS(numProces)
+		fmt.Println("[ monitor ] set max processor to ", numProces)
+	}
 }
 
 func main() {
@@ -40,7 +48,7 @@ func main() {
 	v1.GET("/container/metric/mem/:id", ContainerMem)
 	v1.GET("/container/metric/mempercent/:id", ContainerMemPercent)
 	v1.GET("/container/metric/memlimit/:id", ContainerMemLimit)
-	v1.GET("/container/metric/cpu/:id", ContainerCPU)
+	v1.GET("/container/metric/cup/:id", ContainerCPU)
 	v1.GET("/container/metric/networkio/:id", ContainerNetworkIO)
 	v1.GET("/container/metric/blockio/:id", ContainerBlockIO)
 	v1.GET("/container/info", ContainerInfo)
