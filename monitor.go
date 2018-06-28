@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -36,6 +37,12 @@ func main() {
 	v1 := router.Group("")
 
 	v1.GET("/container/stats/:id", ContainerStats)
+	v1.GET("/container/stats/mem/:id", ContainerMem)
+	v1.GET("/container/stats/mempercent/:id", ContainerMemPercent)
+	v1.GET("/container/stats/memlimit/:id", ContainerMemLimit)
+	v1.GET("/container/stats/cup/:id", ContainerCPU)
+	v1.GET("/container/stats/networkio/:id", ContainerNetworkIO)
+	v1.GET("/container/stats/blockio/:id", ContainerBlockIO)
 	v1.GET("/container/info", ContainerInfo)
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
@@ -62,20 +69,9 @@ func main() {
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if len(id) == 0 || len(hostName) == 0 {
-		ctx.JSON(http.StatusNotFound, "container id/name or host must given")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
 		return
-	}
-
-	isHostKnown := false
-	for _, h := range hostsIPs {
-		if hostName == h {
-			isHostKnown = true
-		}
-	}
-
-	if !isHostKnown {
-		ctx.JSON(http.StatusNotFound, "nknown host, please try again")
 	}
 
 	hstats, err := container.GetContainerMetrics(hostName, id)
@@ -83,6 +79,7 @@ func ContainerStats(ctx *gin.Context) {
 		ctx.String(http.StatusNotFound, err.Error())
 		return
 	}
+	ctx.JSON(http.StatusOK, hstats)
 	/*
 		resp, err := dockerCli.ContainerStats(context.Background(), id, false)
 		if err != nil {
@@ -103,7 +100,184 @@ func ContainerStats(ctx *gin.Context) {
 			return
 		}
 	*/
-	ctx.JSON(http.StatusOK, hstats)
+}
+
+func ContainerMem(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var containerMem []struct {
+		Mem      float64
+		ReadTime string
+	}
+
+	for _, cm := range csm {
+		containerMem = append(containerMem, struct {
+			Mem      float64
+			ReadTime string
+		}{Mem: cm.Memory, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, containerMem)
+}
+
+func ContainerMemPercent(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var containerMemPercent []struct {
+		MemoryPercentage float64
+		ReadTime         string
+	}
+
+	for _, cm := range csm {
+		containerMemPercent = append(containerMemPercent, struct {
+			MemoryPercentage float64
+			ReadTime         string
+		}{MemoryPercentage: cm.MemoryPercentage, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, containerMemPercent)
+}
+
+func ContainerMemLimit(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var containerMemLimit []struct {
+		MemoryLimit float64
+		ReadTime    string
+	}
+
+	for _, cm := range csm {
+		containerMemLimit = append(containerMemLimit, struct {
+			MemoryLimit float64
+			ReadTime    string
+		}{MemoryLimit: cm.MemoryLimit, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, containerMemLimit)
+}
+
+func ContainerCPU(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var containerCPU []struct {
+		CPU      float64
+		ReadTime string
+	}
+
+	for _, cm := range csm {
+		containerCPU = append(containerCPU, struct {
+			CPU      float64
+			ReadTime string
+		}{CPU: cm.CPUPercentage, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, containerCPU)
+}
+
+func ContainerNetworkIO(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var cNetworkIO []struct {
+		NetworkTX float64
+		NetworkRX float64
+		ReadTime  string
+	}
+
+	for _, cm := range csm {
+		cNetworkIO = append(cNetworkIO, struct {
+			NetworkTX float64
+			NetworkRX float64
+			ReadTime  string
+		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, cNetworkIO)
+}
+
+func ContainerBlockIO(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam(id, hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	csm, err := container.GetContainerMetrics(hostName, id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	var cBlockIO []struct {
+		BlockRead  float64
+		BlockWrite float64
+		ReadTime   string
+	}
+
+	for _, cm := range csm {
+		cBlockIO = append(cBlockIO, struct {
+			BlockRead  float64
+			BlockWrite float64
+			ReadTime   string
+		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: cm.ReadTime})
+	}
+
+	ctx.JSON(http.StatusOK, cBlockIO)
 }
 
 func ContainerInfo(ctx *gin.Context) {
@@ -111,7 +285,12 @@ func ContainerInfo(ctx *gin.Context) {
 		Len   int
 		Names []string
 	}{}
-	cinfo.Names = container.GetCInfo("")
+	hostName := ctx.DefaultQuery("host", "")
+	if err := checkParam("must", hostName); err != nil {
+		ctx.String(http.StatusNotFound, err.Error())
+		return
+	}
+	cinfo.Names = container.GetCInfo(hostName)
 	if cinfo.Names == nil {
 		ctx.JSON(http.StatusNotFound, "stack got no container metrics")
 		return
@@ -180,4 +359,22 @@ func HostMemInfo(ctx *gin.Context) {
 	}
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSON(http.StatusOK, hostMemInfo)
+}
+
+func checkParam(id, hostName string) error {
+	if len(id) == 0 || len(hostName) == 0 {
+		return errors.New("container id/name or host must given")
+	}
+
+	isHostKnown := false
+	for _, h := range hostsIPs {
+		if hostName == h {
+			isHostKnown = true
+		}
+	}
+
+	if !isHostKnown {
+		return errors.New("nknown host, please try again")
+	}
+	return nil
 }
