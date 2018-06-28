@@ -40,7 +40,7 @@ func main() {
 	v1.GET("/container/metric/mem/:id", ContainerMem)
 	v1.GET("/container/metric/mempercent/:id", ContainerMemPercent)
 	v1.GET("/container/metric/memlimit/:id", ContainerMemLimit)
-	v1.GET("/container/metric/cup/:id", ContainerCPU)
+	v1.GET("/container/metric/cpu/:id", ContainerCPU)
 	v1.GET("/container/metric/networkio/:id", ContainerNetworkIO)
 	v1.GET("/container/metric/blockio/:id", ContainerBlockIO)
 	v1.GET("/container/info", ContainerInfo)
