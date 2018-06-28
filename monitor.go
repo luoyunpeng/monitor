@@ -37,12 +37,12 @@ func main() {
 	v1 := router.Group("")
 
 	v1.GET("/container/stats/:id", ContainerStats)
-	v1.GET("/container/stats/mem/:id", ContainerMem)
-	v1.GET("/container/stats/mempercent/:id", ContainerMemPercent)
-	v1.GET("/container/stats/memlimit/:id", ContainerMemLimit)
-	v1.GET("/container/stats/cup/:id", ContainerCPU)
-	v1.GET("/container/stats/networkio/:id", ContainerNetworkIO)
-	v1.GET("/container/stats/blockio/:id", ContainerBlockIO)
+	v1.GET("/container/metric/mem/:id", ContainerMem)
+	v1.GET("/container/metric/mempercent/:id", ContainerMemPercent)
+	v1.GET("/container/metric/memlimit/:id", ContainerMemLimit)
+	v1.GET("/container/metric/cup/:id", ContainerCPU)
+	v1.GET("/container/metric/networkio/:id", ContainerNetworkIO)
+	v1.GET("/container/metric/blockio/:id", ContainerBlockIO)
 	v1.GET("/container/info", ContainerInfo)
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
@@ -116,19 +116,19 @@ func ContainerMem(ctx *gin.Context) {
 		return
 	}
 
-	var containerMem []struct {
+	var cMem []struct {
 		Mem      float64
 		ReadTime string
 	}
 
 	for _, cm := range csm {
-		containerMem = append(containerMem, struct {
+		cMem = append(cMem, struct {
 			Mem      float64
 			ReadTime string
 		}{Mem: cm.Memory, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSON(http.StatusOK, containerMem)
+	ctx.JSON(http.StatusOK, cMem)
 }
 
 func ContainerMemPercent(ctx *gin.Context) {
@@ -145,19 +145,19 @@ func ContainerMemPercent(ctx *gin.Context) {
 		return
 	}
 
-	var containerMemPercent []struct {
+	var cMemPercent []struct {
 		MemoryPercentage float64
 		ReadTime         string
 	}
 
 	for _, cm := range csm {
-		containerMemPercent = append(containerMemPercent, struct {
+		cMemPercent = append(cMemPercent, struct {
 			MemoryPercentage float64
 			ReadTime         string
 		}{MemoryPercentage: cm.MemoryPercentage, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSON(http.StatusOK, containerMemPercent)
+	ctx.JSON(http.StatusOK, cMemPercent)
 }
 
 func ContainerMemLimit(ctx *gin.Context) {
@@ -174,19 +174,17 @@ func ContainerMemLimit(ctx *gin.Context) {
 		return
 	}
 
-	var containerMemLimit []struct {
+	var cMemLimit struct {
 		MemoryLimit float64
 		ReadTime    string
 	}
 
-	for _, cm := range csm {
-		containerMemLimit = append(containerMemLimit, struct {
-			MemoryLimit float64
-			ReadTime    string
-		}{MemoryLimit: cm.MemoryLimit, ReadTime: cm.ReadTime})
+	if len(csm) >= 1 {
+		cMemLimit.MemoryLimit = csm[0].MemoryLimit
+		cMemLimit.ReadTime = csm[0].ReadTime
 	}
 
-	ctx.JSON(http.StatusOK, containerMemLimit)
+	ctx.JSON(http.StatusOK, cMemLimit)
 }
 
 func ContainerCPU(ctx *gin.Context) {
@@ -203,19 +201,19 @@ func ContainerCPU(ctx *gin.Context) {
 		return
 	}
 
-	var containerCPU []struct {
+	var cCPU []struct {
 		CPU      float64
 		ReadTime string
 	}
 
 	for _, cm := range csm {
-		containerCPU = append(containerCPU, struct {
+		cCPU = append(cCPU, struct {
 			CPU      float64
 			ReadTime string
 		}{CPU: cm.CPUPercentage, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSON(http.StatusOK, containerCPU)
+	ctx.JSON(http.StatusOK, cCPU)
 }
 
 func ContainerNetworkIO(ctx *gin.Context) {
