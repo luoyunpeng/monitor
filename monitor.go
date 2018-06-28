@@ -61,15 +61,15 @@ func main() {
 
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
-	host := ctx.DefaultQuery("host", "")
-	if len(id) == 0 || len(host) == 0 {
+	hostName := ctx.DefaultQuery("host", "")
+	if len(id) == 0 || len(hostName) == 0 {
 		ctx.JSON(http.StatusNotFound, "container id/name or host must given")
 		return
 	}
 
 	isHostKnown := false
 	for _, h := range hostsIPs {
-		if host == h {
+		if hostName == h {
 			isHostKnown = true
 		}
 	}
@@ -78,7 +78,7 @@ func ContainerStats(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, "nknown host, please try again")
 	}
 
-	hstats, err := container.GetContainerMetrics(host, id)
+	hstats, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.String(http.StatusNotFound, err.Error())
 		return
@@ -180,21 +180,4 @@ func HostMemInfo(ctx *gin.Context) {
 	}
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSON(http.StatusOK, hostMemInfo)
-}
-
-func ContainersID() ([]string, error) {
-	listOpt := types.ContainerListOptions{
-		Quiet: true,
-	}
-	containers, err := dockerCli.ContainerList(context.Background(), listOpt)
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make([]string, len(containers))
-	for _, c := range containers {
-		ids = append(ids, c.ID[:12])
-	}
-
-	return ids, nil
 }

@@ -19,6 +19,7 @@ import (
 )
 
 var (
+	//
 	allHostStack []*hostContainerMStack
 	mu           sync.RWMutex
 )
@@ -32,6 +33,7 @@ func initLog(ip string) *log.Logger {
 	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
+//each host will run this method only once
 func KeepStats(dockerCli *client.Client, ip string) {
 	closeChan := make(chan error)
 

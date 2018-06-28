@@ -17,6 +17,7 @@ var (
 	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
+//one docker host have only one hostContainerMStack
 type hostContainerMStack struct {
 	mu sync.RWMutex
 	//indicate which host this stats belong to
