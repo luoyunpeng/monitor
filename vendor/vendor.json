@@ -154,6 +154,14 @@
 			"revisionTime": "2018-04-22T16:34:14Z"
 		},
 		{
+			"checksumSHA1": "gr9TwvdgzxxfCaUscs7zfnHxsVk=",
+			"path": "github.com/gin-contrib/cors",
+			"revision": "cf4846e6a636a76237a28d9286f163c132e841bc",
+			"revisionTime": "2017-03-18T12:53:40Z",
+			"version": "v1.2",
+			"versionExact": "v1.2"
+		},
+		{
 			"checksumSHA1": "BhMowD2DIKSd9qq8Pzh7Y3mh2/w=",
 			"path": "github.com/gin-contrib/sse",
 			"revision": "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae",
