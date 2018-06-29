@@ -6,7 +6,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math"
 	"os"
 	"strings"
 	"sync"
@@ -224,9 +223,9 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			if cms.name == "" {
 				cms.name = cfm.Name
 			}
-			cfm.CPUPercentage = math.Trunc(cpuPercent*1e6+0.5) * 1e-6
+			cfm.CPUPercentage = cpuPercent
 			cfm.Memory = mem
-			cfm.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
+			cfm.MemoryPercentage = memPercent
 			cfm.MemoryLimit = memLimit
 			cfm.NetworkRx = netRx
 			cfm.NetworkTx = netTx
@@ -273,7 +272,6 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				waitFirst.Done()
 			}
 		}
-
 	}
 }
 
