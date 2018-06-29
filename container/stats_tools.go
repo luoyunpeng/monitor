@@ -292,9 +292,9 @@ func Parse(respByte []byte) (*ContainerFMetrics, error) {
 	s := &ContainerFMetrics{}
 	s.Name = statsJSON.Name[1:]
 	s.ContainerID = statsJSON.ID
-	s.CPUPercentage = math.Trunc(cpuPercent*1e2+0.5) * 1e-2
+	s.CPUPercentage = cpuPercent
 	s.Memory = mem
-	s.MemoryPercentage = math.Trunc(memPercent*1e2+0.5) * 1e-2
+	s.MemoryPercentage = memPercent
 	s.MemoryLimit = memLimit
 	s.NetworkRx = netRx
 	s.NetworkTx = netTx
@@ -322,7 +322,7 @@ func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v *types.StatsJ
 	if systemDelta > 0.0 && cpuDelta > 0.0 {
 		cpuPercent = (cpuDelta / systemDelta) * onlineCPUs * 100.0
 	}
-	return cpuPercent
+	return Round(cpuPercent, 6)
 }
 
 func CalculateBlockIO(blkio types.BlkioStats) (uint64, uint64) {
@@ -358,7 +358,13 @@ func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 
 	// MemoryStats.Limit will never be 0 unless the container is not running and we haven't
 	// got any data from cgroup
 	if limit != 0 {
-		return usedNoCache / limit * 100.0
+		return Round(usedNoCache/limit*100.0, 3)
 	}
 	return 0
+}
+
+//return given the significant digit of flaot64
+func Round(f float64, n int) float64 {
+	pow10_n := math.Pow10(n)
+	return math.Trunc((f+0.5/pow10_n)*pow10_n) / pow10_n
 }
