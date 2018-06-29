@@ -153,16 +153,16 @@ func ContainerMemPercent(ctx *gin.Context) {
 		return
 	}
 
-	var cMemPercent []struct {
-		MemoryPercentage float64
-		ReadTime         string
+	var cMemPercent struct {
+		UsedPercentage float64
+		UnUsePercentage      float64
+		ReadTime             string
 	}
 
-	for _, cm := range csm {
-		cMemPercent = append(cMemPercent, struct {
-			MemoryPercentage float64
-			ReadTime         string
-		}{MemoryPercentage: cm.MemoryPercentage, ReadTime: cm.ReadTime})
+	if len(csm) >= 1 {
+		cMemPercent.UsedPercentage = csm[0].MemoryPercentage
+		cMemPercent.UnUsePercentage = 100 - cMemPercent.UsedPercentage
+		cMemPercent.ReadTime = csm[0].ReadTime
 	}
 
 	ctx.JSON(http.StatusOK, cMemPercent)
