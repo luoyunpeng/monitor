@@ -12,9 +12,11 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
@@ -70,6 +72,18 @@ func main() {
 		}
 	}()
 
+	router.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		/*AllowOriginFunc: func(origin string) bool {
+			return origin == "https://github.com"
+		},*/
+		MaxAge: 1 * time.Hour,
+	}))
 	// By default it serves on :8080
 	router.Run()
 }
@@ -154,9 +168,9 @@ func ContainerMemPercent(ctx *gin.Context) {
 	}
 
 	var cMemPercent struct {
-		UsedPercentage float64
-		UnUsePercentage      float64
-		ReadTime             string
+		UsedPercentage  float64
+		UnUsePercentage float64
+		ReadTime        string
 	}
 
 	if len(csm) >= 1 {
