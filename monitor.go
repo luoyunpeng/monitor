@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -72,20 +71,35 @@ func main() {
 		}
 	}()
 
-	router.Use(cors.New(cors.Config{
+	/*router.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET"},
 		AllowHeaders:     []string{"*"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
-		/*AllowOriginFunc: func(origin string) bool {
+		AllowOriginFunc: func(origin string) bool {
 			return origin == "https://github.com"
-		},*/
+		},
 		MaxAge: 1 * time.Hour,
-	}))
+	}))*/
 	// By default it serves on :8080
+	router.Use(cors.Default())
 	router.Run()
+}
+
+func AccessJsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		w := c.Writer
+		r := c.Request
+		// 处理js-ajax跨域问题
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, POST")
+		w.Header().Add("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Add("Access-Control-Allow-Headers", "Access-Token")
+		c.Next()
+	}
 }
 
 func ContainerStats(ctx *gin.Context) {
