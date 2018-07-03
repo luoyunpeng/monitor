@@ -345,13 +345,13 @@ func CalculateNetwork(network map[string]types.NetworkStats) (float64, float64) 
 		rx += float64(v.RxBytes)
 		tx += float64(v.TxBytes)
 	}
-	return rx, tx
+	return Round(rx/(1024*1024), 3), Round(tx/(1024*1024), 3)
 }
 
 // calculateMemUsageUnixNoCache calculate memory usage of the container.
 // Page cache is intentionally excluded to avoid misinterpretation of the output.
 func CalculateMemUsageUnixNoCache(mem types.MemoryStats) float64 {
-	return float64(mem.Usage - mem.Stats["cache"])
+	return Round(float64(mem.Usage-mem.Stats["cache"])/(1024*1024), 2)
 }
 
 func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 {

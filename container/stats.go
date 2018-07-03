@@ -212,8 +212,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
 			blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
 			// change mem related metric to MB
-			mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats) / (1024 * 1024)
-			memLimit = float64(statsJSON.MemoryStats.Limit) / (1024 * 1024)
+			mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
+			memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
 			memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
 			pidsStatsCurrent = statsJSON.PidsStats.Current
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
@@ -229,8 +229,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			cfm.MemoryLimit = memLimit
 			cfm.NetworkRx = netRx
 			cfm.NetworkTx = netTx
-			cfm.BlockRead = float64(blkRead)
-			cfm.BlockWrite = float64(blkWrite)
+			cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3)
+			cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3)
 			cfm.PidsCurrent = pidsStatsCurrent
 			cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
