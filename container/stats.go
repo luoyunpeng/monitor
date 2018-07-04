@@ -75,7 +75,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	hcmsStack := NewHostCMStack(ip)
 	addToAllHostStack(hcmsStack)
 	//allHostStack = append(allHostStack, hcmsStack)
-	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O ")
+	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	getContainerList := func() {
 		options := types.ContainerListOptions{
 			All: false,
@@ -151,10 +151,12 @@ func KeepStats(dockerCli *client.Client, ip string) {
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
 	var (
-		getFirst   bool
-		u          = make(chan error, 1)
-		errNoSuchC = errors.New("no such container")
-		cfm        *ContainerFMetrics
+		getFirst                      bool
+		u                             = make(chan error, 1)
+		errNoSuchC                    = errors.New("no such container")
+		cfm                           *ContainerFMetrics
+		lastNetworkTX, lastNetworkRX  float64
+		lastBlockRead, lastBlockWrite float64
 	)
 
 	defer func() {
@@ -227,17 +229,30 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			cfm.Memory = mem
 			cfm.MemoryPercentage = memPercent
 			cfm.MemoryLimit = memLimit
-			cfm.NetworkRx = netRx
-			cfm.NetworkTx = netTx
-			cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3)
-			cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3)
+			if !getFirst {
+				lastNetworkRX, cfm.NetworkRx = netRx, 0
+				lastNetworkTX, cfm.NetworkTx = netTx, 0
+			} else {
+				lastNetworkRX, cfm.NetworkRx = netRx, netRx-lastNetworkRX
+				lastNetworkTX, cfm.NetworkTx = netTx, netTx-lastNetworkTX
+			}
+
+			if !getFirst {
+				lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
+				lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
+			} else {
+				tmpRead := Round(float64(blkRead)/(1024*1024), 3)
+				tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
+				lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024), 3)-lastBlockRead
+				lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024), 3)-lastBlockWrite
+			}
 			cfm.PidsCurrent = pidsStatsCurrent
 			cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 			cms.put(cfm)
 			u <- nil
 			response.Body.Close()
-			logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite)
+			logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 			time.Sleep(15 * time.Second)
 		}
 	}()
