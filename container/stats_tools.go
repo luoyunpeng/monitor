@@ -71,7 +71,7 @@ func (s *hostContainerMStack) allNames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	names := []string{}
+	var names []string
 	for _, cm := range s.cms {
 		names = append(names, cm.name)
 	}
@@ -356,7 +356,7 @@ func CalculateMemUsageUnixNoCache(mem types.MemoryStats) float64 {
 
 func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 {
 	// MemoryStats.Limit will never be 0 unless the container is not running and we haven't
-	// got any data from cgroup
+	// got any data from cGroup
 	if limit != 0 {
 		return Round(usedNoCache/limit*100.0, 3)
 	}

@@ -88,6 +88,7 @@ func main() {
 	router.Run()
 }
 
+/*
 func AccessJsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := c.Writer
@@ -112,6 +113,7 @@ func AccessJsMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+*/
 
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
@@ -199,9 +201,9 @@ func ContainerMemPercent(ctx *gin.Context) {
 	}
 
 	if len(csm) >= 1 {
-		cMemPercent.UsedPercentage = csm[0].MemoryPercentage
+		cMemPercent.UsedPercentage = csm[len(csm)-1].MemoryPercentage
 		cMemPercent.UnUsePercentage = 100 - cMemPercent.UsedPercentage
-		cMemPercent.ReadTime = strings.Split(csm[0].ReadTime, " ")[1]
+		cMemPercent.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
 	}
 
 	ctx.JSONP(http.StatusOK, cMemPercent)
@@ -227,8 +229,8 @@ func ContainerMemLimit(ctx *gin.Context) {
 	}
 
 	if len(csm) >= 1 {
-		cMemLimit.MemoryLimit = csm[0].MemoryLimit
-		cMemLimit.ReadTime = strings.Split(csm[0].ReadTime, " ")[1]
+		cMemLimit.MemoryLimit = csm[len(csm)-1].MemoryLimit
+		cMemLimit.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
 	}
 
 	ctx.JSONP(http.StatusOK, cMemLimit)
