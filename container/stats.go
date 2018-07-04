@@ -233,8 +233,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				lastNetworkRX, cfm.NetworkRx = netRx, 0
 				lastNetworkTX, cfm.NetworkTx = netTx, 0
 			} else {
-				lastNetworkRX, cfm.NetworkRx = netRx, netRx-lastNetworkRX
-				lastNetworkTX, cfm.NetworkTx = netTx, netTx-lastNetworkTX
+				lastNetworkRX, cfm.NetworkRx = netRx, Round(netRx-lastNetworkRX, 3)
+				lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
 			}
 
 			if !getFirst {
