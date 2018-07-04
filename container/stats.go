@@ -23,7 +23,11 @@ var (
 	mu           sync.RWMutex
 )
 
-const defulatReadLength = 15
+const (
+	defaultReadLength      = 15
+	defaultCollectDuration = 15 * time.Second
+	defaultCollectTimeOut  = 25 * time.Second
+)
 
 func initLog(ip string) *log.Logger {
 	file, err := os.OpenFile(ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -100,7 +104,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	started := make(chan struct{})
 	eh := InitEventHandler()
 	eh.Handle("start", func(e events.Message) {
-		logger.Println("event handler: received start event: %v", e)
+		logger.Printf("event handler: received start event: %v", e)
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.add(cms) {
 			waitFirst.Add(1)
@@ -109,7 +113,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	})
 
 	eh.Handle("die", func(e events.Message) {
-		logger.Println("event handler: received die event: %v", e)
+		logger.Printf("event handler: received die event: %v", e)
 		hcmsStack.remove(e.ID[:12])
 	})
 
@@ -253,13 +257,13 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			u <- nil
 			response.Body.Close()
 			logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-			time.Sleep(15 * time.Second)
+			time.Sleep(defaultCollectDuration)
 		}
 	}()
 
 	for {
 		select {
-		case <-time.After(25 * time.Second):
+		case <-time.After(defaultCollectTimeOut):
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			logger.Println("collect for container-"+cms.name, " time out")
@@ -308,7 +312,7 @@ func GetContainerMetrics(host, id string) ([]*ContainerFMetrics, error) {
 			}
 			for _, containerStack := range hoststack.cms {
 				if containerStack.id == id || containerStack.name == id {
-					return containerStack.read(defulatReadLength), nil
+					return containerStack.read(defaultReadLength), nil
 				}
 			}
 		}
