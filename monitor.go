@@ -2,11 +2,9 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net/http"
@@ -14,9 +12,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ahmetb/dlog"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
 	"github.com/luoyunpeng/monitor/host"
@@ -346,6 +346,12 @@ func ContainerInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cinfo)
 }
 
+var upGrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 func ContainerLogs(ctx *gin.Context) {
 	id := ctx.Param("id")
 	size := ctx.DefaultQuery("size", "500")
@@ -358,29 +364,29 @@ func ContainerLogs(ctx *gin.Context) {
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: true,
-		Since:      "",
-		Until:      "",
-		Follow:     false,
-		Details:    false,
+		Follow:     true,
+		Details:    true,
 		Tail:       size,
 	}
-	bufferLogString := bytes.NewBufferString("")
-	respRead, err := dockerCli.ContainerLogs(context.Background(), id, logOptions)
+
+	logBody, err := dockerCli.ContainerLogs(context.Background(), id, logOptions)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
-	defer respRead.Close()
+	defer logBody.Close()
 
-	fileReader := bufio.NewReader(respRead)
-	for {
-		line, errRead := fileReader.ReadString('\n')
-		if errRead == io.EOF {
-			break
+	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	mt, _, _ := ws.ReadMessage()
+	rr := dlog.NewReader(logBody)
+	s := bufio.NewScanner(rr)
+	for s.Scan() {
+		err = ws.WriteMessage(mt, s.Bytes())
+		if err != nil {
+			fmt.Printf("err occured when get log from container: %v", err)
 		}
-		bufferLogString.WriteString(line[8:])
+		return
 	}
-	ctx.String(http.StatusOK, bufferLogString.String())
 }
 
 func HostMemInfo(ctx *gin.Context) {

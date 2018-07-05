@@ -10,6 +10,12 @@
 			"revisionTime": "2018-04-22T16:34:14Z"
 		},
 		{
+			"checksumSHA1": "BZ9lUIBYXKoYvCJfVtMhakd60XU=",
+			"path": "github.com/ahmetb/dlog",
+			"revision": "4fb5f8204f26b45ef2445bd98bc04fccf04a3e0a",
+			"revisionTime": "2017-01-05T20:53:44Z"
+		},
+		{
 			"checksumSHA1": "waZp41t+3Lu7Y8GkSeqXxtZsbbs=",
 			"origin": "github.com/docker/docker/vendor/github.com/docker/distribution/digestset",
 			"path": "github.com/docker/distribution/digestset",
@@ -203,6 +209,12 @@
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
 			"revisionTime": "2017-11-13T18:07:20Z"
+		},
+		{
+			"checksumSHA1": "jujDvLmcMvf0EULHWlDDiw/Om0Q=",
+			"path": "github.com/gorilla/websocket",
+			"revision": "5ed622c449da6d44c3c8329331ff47a9e5844f71",
+			"revisionTime": "2018-06-05T20:25:52Z"
 		},
 		{
 			"checksumSHA1": "1xTAm0KvYP4SjVPLU5n2QO+Mi6o=",
