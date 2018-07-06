@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ahmetb/dlog"
 	"github.com/docker/docker/api/types"
@@ -25,13 +26,19 @@ import (
 var (
 	dockerCli *client.Client
 	hostsIPs  = []string{"localhost"}
+	list      sync.Map
 )
 
 func init() {
 	var err error
-	dockerCli, err = common.InitClient("localhost")
-	if err != nil {
-		panic(err)
+	for _, ip := range hostsIPs {
+		if ip == "localhost" {
+			dockerCli, err = common.InitClient("localhost")
+			if err != nil {
+				panic(err)
+			}
+			list.Store("ip", dockerCli)
+		}
 	}
 
 	if runtime.NumCPU() >= 4 {
@@ -67,24 +74,11 @@ func main() {
 					continue
 				}
 				go container.KeepStats(cli, ip)
+				list.Store(ip, cli)
 			}
 		}
 	}()
 
-	/*router.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		AllowOriginFunc: func(origin string) bool {
-			return origin == "https://github.com"
-		},
-		MaxAge: 1 * time.Hour,
-	}))*/
-	// By default it serves on :8080
-	//router.Use(cors.Default())
 	router.Run()
 }
 
@@ -93,7 +87,7 @@ func AccessJsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := c.Writer
 		r := c.Request
-		// 处理js-ajax跨域问题
+		// deal js-ajax cors issue
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, POST")
@@ -352,8 +346,10 @@ var upGrader = websocket.Upgrader{
 	},
 }
 
+//upgrade this handler to web socket
 func ContainerLogs(ctx *gin.Context) {
-	id := ctx.Param("id")
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
 	size := ctx.DefaultQuery("size", "500")
 	_, err := strconv.Atoi(size)
 	if size != "all" && err != nil {
@@ -369,21 +365,54 @@ func ContainerLogs(ctx *gin.Context) {
 		Tail:       size,
 	}
 
-	logBody, err := dockerCli.ContainerLogs(context.Background(), id, logOptions)
+	//upgrade get to web socket
+	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
-	defer logBody.Close()
+	defer ws.Close()
 
-	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
-	mt, _, _ := ws.ReadMessage()
-	rr := dlog.NewReader(logBody)
-	s := bufio.NewScanner(rr)
-	for s.Scan() {
-		err = ws.WriteMessage(mt, s.Bytes())
+	if err := checkParam(id, hostName); err != nil {
+		err = ws.WriteMessage(1, []byte(err.Error()))
 		if err != nil {
 			fmt.Printf("err occured when get log from container: %v", err)
+		}
+		return
+	}
+
+	if cliTmp, loaded := list.Load(hostName); loaded {
+		if cli, ok := cliTmp.(*client.Client); ok {
+			logBody, err := cli.ContainerLogs(context.Background(), id, logOptions)
+			if err != nil {
+				err = ws.WriteMessage(1, []byte(err.Error()))
+				return
+			}
+			defer logBody.Close()
+
+			//read message from ws(websocket)
+			mt, _, err := ws.ReadMessage()
+			if err != nil {
+				err = ws.WriteMessage(1, []byte(err.Error()))
+				if err != nil {
+					fmt.Printf("err occured when get log from container: %v", err)
+				}
+				return
+			}
+			// write container log to ws
+			rr := dlog.NewReader(logBody)
+			s := bufio.NewScanner(rr)
+			for s.Scan() {
+				err = ws.WriteMessage(mt, s.Bytes())
+				if err != nil {
+					fmt.Printf("err occured when get log from container: %v", err)
+					return
+				}
+			}
+		}
+	} else {
+		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the host"))
+		if errLoad != nil {
+			fmt.Printf("err occured when get log from container: %v", errLoad)
 		}
 		return
 	}
