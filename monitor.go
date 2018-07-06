@@ -35,9 +35,10 @@ func init() {
 		if ip == "localhost" {
 			dockerCli, err = common.InitClient("localhost")
 			if err != nil {
-				panic(err)
+				fmt.Printf("pre init docker client for localhost failed: %v", err)
+				return
 			}
-			list.Store("ip", dockerCli)
+			list.Store(ip, dockerCli)
 		}
 	}
 
