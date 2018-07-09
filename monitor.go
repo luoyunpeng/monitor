@@ -31,6 +31,9 @@ var (
 
 func init() {
 	var err error
+	if len(hostsIPs) == 0 {
+		panic("at least one host must be given")
+	}
 	for _, ip := range hostsIPs {
 		if ip == "localhost" {
 			dockerCli, err = common.InitClient("localhost")
@@ -381,7 +384,7 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	if cliTmp, loaded := list.Load(hostName); loaded {
+	if cliTmp, isLoaded := list.Load(hostName); isLoaded {
 		if cli, ok := cliTmp.(*client.Client); ok {
 			logBody, err := cli.ContainerLogs(context.Background(), id, logOptions)
 			if err != nil {
