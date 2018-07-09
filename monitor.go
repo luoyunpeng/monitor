@@ -197,7 +197,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 
 	if len(csm) >= 1 {
 		cMemPercent.UsedPercentage = csm[len(csm)-1].MemoryPercentage
-		cMemPercent.UnUsePercentage = 100 - cMemPercent.UsedPercentage
+		cMemPercent.UnUsePercentage = container.Round(100-cMemPercent.UsedPercentage, 3)
 		cMemPercent.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
 	}
 
@@ -366,7 +366,7 @@ func ContainerLogs(ctx *gin.Context) {
 		Tail:       size,
 	}
 
-	//upgrade get to web socket
+	//upgrade http-Get to WebSocket
 	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		return
