@@ -128,8 +128,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// wait event listener go routine started
 	<-started
 
-	// Start a short-lived goroutine to retrieve the initial list of
-	// containers.
+	// echo running container got one goroutine to collect metrics,
 	getContainerList()
 	waitFirst.Wait()
 }
