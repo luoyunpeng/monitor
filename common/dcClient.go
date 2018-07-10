@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	hostURL = "tcp://ip:2375"
+	hostURL        = "tcp://ip:2375"
+	defaultVersion = "1.37"
 )
 
 func InitClient(ip string) (*client.Client, error) {
@@ -16,10 +17,11 @@ func InitClient(ip string) (*client.Client, error) {
 		cli *client.Client
 	)
 	if ip == "localhost" {
-		cli, err = client.NewClientWithOpts(client.FromEnv)
+		cli, err = client.NewClientWithOpts(client.FromEnv, client.WithVersion(defaultVersion))
 		log.Println("[ monitor ]  init docker client from env for localhost")
 	} else {
-		cli, err = client.NewClientWithOpts(client.WithHost(strings.Replace(hostURL, "ip", ip, 1)))
+		realURL := strings.Replace(hostURL, "ip", ip, 1)
+		cli, err = client.NewClientWithOpts(client.WithHost(realURL), client.WithVersion(defaultVersion))
 		log.Println("[ monitor ]  init docker client from remote ip: ", ip)
 	}
 
