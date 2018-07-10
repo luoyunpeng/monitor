@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ahmetb/dlog"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
@@ -403,10 +402,22 @@ func ContainerLogs(ctx *gin.Context) {
 				return
 			}
 			// write container log to ws
-			rr := dlog.NewReader(logBody)
+			/*rr := dlog.NewReader(logBody)
 			s := bufio.NewScanner(rr)
 			for s.Scan() {
 				err = ws.WriteMessage(mt, s.Bytes())
+				if err != nil {
+					fmt.Printf("err occured when get log from container: %v", err)
+					return
+				}
+			}*/
+			br := bufio.NewReader(logBody)
+			for {
+				lineBytes, err := br.ReadBytes('\n')
+				if err != nil {
+					break
+				}
+				err = ws.WriteMessage(mt, lineBytes[8:])
 				if err != nil {
 					fmt.Printf("err occured when get log from container: %v", err)
 					return
