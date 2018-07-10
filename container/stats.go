@@ -40,12 +40,16 @@ func initLog(ip string) *log.Logger {
 
 //each host will run this method only once
 func KeepStats(dockerCli *client.Client, ip string) {
-	closeChan := make(chan error)
 
 	ctx := context.Background()
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
+		defer func() {
+			close(c)
+			dockerCli.Close()
+		}()
+
 		f := filters.NewArgs()
 		f.Add("type", "container")
 		options := types.EventsOptions{
@@ -64,7 +68,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case event := <-eventq:
 				c <- event
 			case err := <-errq:
-				closeChan <- err
+				log.Printf("err happen when list docker event: %v", err)
 				return
 			}
 		}
@@ -86,7 +90,8 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			closeChan <- err
+			log.Printf("err happen when list all running container: %v", err)
+			return
 		}
 		for _, container := range cs {
 			cms := NewContainerMStack("", container.ID[:12])
@@ -97,7 +102,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 	}
 
-	// If no names were specified, start a long running goroutine which
+	// default list all running containers, start a long running goroutine which
 	// monitors container events. We make sure we're subscribed before
 	// retrieving the list of running containers to avoid a race where we
 	// would "miss" a creation.
@@ -120,11 +125,6 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	eventChan := make(chan events.Message)
 	go eh.Watch(eventChan)
 	go monitorContainerEvents(started, eventChan)
-	defer func() {
-		close(eventChan)
-		close(closeChan)
-		dockerCli.Close()
-	}()
 	// wait event listener go routine started
 	<-started
 
@@ -132,41 +132,22 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
-
-	for {
-		select {
-		case err, ok := <-closeChan:
-			if ok {
-				if err != nil {
-					// this is suppressing "unexpected EOF" in the cli when the
-					// daemon restarts so it shutdowns cleanly
-					if err == io.ErrUnexpectedEOF {
-
-					}
-					logger.Printf("err when keeping monitor : %v ", err)
-					return
-				}
-			}
-		default:
-			time.Sleep(15 * time.Second)
-		}
-	}
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
 	var (
-		getFirst                      bool
+		isFirstCollect                = true
 		u                             = make(chan error, 1)
 		errNoSuchC                    = errors.New("no such container")
-		cfm                           *ContainerFMetrics
+		cfm                           *ParsedConatinerMetrics
 		lastNetworkTX, lastNetworkRX  float64
 		lastBlockRead, lastBlockWrite float64
 	)
 
 	defer func() {
 		// if error happens and we get nothing of stats, release wait group whatever
-		if !getFirst {
-			getFirst = true
+		if isFirstCollect {
+			isFirstCollect = false
 			waitFirst.Done()
 		}
 	}()
@@ -185,19 +166,18 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			)
 
 			response, err := cli.ContainerStats(ctx, cms.id, false)
-			if err != nil {
-				logger.Printf("collecting stats for %v", err)
-				if strings.Contains(err.Error(), "No such container") {
-					u <- errNoSuchC
-				}
-				return
-			}
-
 			// bool value initial value is false
 			if cms.isInvalid {
 				logger.Println(cms.name, " is not running, stop collecting in goroutine")
 				response.Body.Close()
 				u <- errNoSuchC
+				return
+			}
+			if err != nil {
+				logger.Printf("collecting stats for %v", err)
+				if strings.Contains(err.Error(), "No such container") {
+					u <- errNoSuchC
+				}
 				return
 			}
 
@@ -224,7 +204,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			pidsStatsCurrent = statsJSON.PidsStats.Current
 			netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-			cfm = NewContainerStats(cms.id)
+			cfm = NewParsedConatinerMetrics(cms.id)
 			cfm.Name = statsJSON.Name[1:]
 			if cms.name == "" {
 				cms.name = cfm.Name
@@ -233,7 +213,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			cfm.Memory = mem
 			cfm.MemoryPercentage = memPercent
 			cfm.MemoryLimit = memLimit
-			if !getFirst {
+			if isFirstCollect {
 				lastNetworkRX, cfm.NetworkRx = netRx, 0
 				lastNetworkTX, cfm.NetworkTx = netTx, 0
 			} else {
@@ -241,7 +221,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
 			}
 
-			if !getFirst {
+			if isFirstCollect {
 				lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
 				lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
 			} else {
@@ -268,12 +248,12 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			// the specified duration.
 			logger.Println("collect for container-"+cms.name, " time out")
 			// if this is the first stat you get, release WaitGroup
-			if !getFirst {
-				getFirst = true
+			if isFirstCollect {
+				isFirstCollect = false
 				waitFirst.Done()
 			}
 		case err := <-u:
-			//s.SetError(err)
+			//EOF error
 			if err == io.EOF {
 				break
 			}
@@ -286,8 +266,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				continue
 			}
 			// if this is the first stat you get, release WaitGroup
-			if !getFirst {
-				getFirst = true
+			if isFirstCollect {
+				isFirstCollect = false
 				waitFirst.Done()
 			}
 		}
@@ -301,7 +281,7 @@ func addToAllHostStack(stack *hostContainerMStack) {
 	allHostStack = append(allHostStack, stack)
 }
 
-func GetContainerMetrics(host, id string) ([]*ContainerFMetrics, error) {
+func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
