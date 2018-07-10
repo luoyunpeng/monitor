@@ -85,7 +85,7 @@ type containerMetricStack struct {
 	id   string
 	name string
 
-	csFMetrics []*ContainerFMetrics
+	csFMetrics []*ParsedConatinerMetrics
 
 	isInvalid bool
 }
@@ -94,7 +94,7 @@ func NewContainerMStack(name, id string) *containerMetricStack {
 	return &containerMetricStack{name: name, id: id}
 }
 
-func (cms *containerMetricStack) put(cfm *ContainerFMetrics) bool {
+func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
 	defer cms.mu.Unlock()
 
@@ -108,7 +108,7 @@ func (cms *containerMetricStack) put(cfm *ContainerFMetrics) bool {
 	return true
 }
 
-func (cms *containerMetricStack) read(num int) []*ContainerFMetrics {
+func (cms *containerMetricStack) read(num int) []*ParsedConatinerMetrics {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
@@ -128,72 +128,12 @@ func (cms *containerMetricStack) length() int {
 	return len(cms.csFMetrics)
 }
 
-/*
-// ContainerStats represents an entity to store containers statistics synchronously
-type CStats struct {
-	mutex sync.Mutex
-	HumanizeMetrics
-	err error
-}
-
-// GetError returns the container statistics error.
-// This is used to determine whether the statistics are valid or not
-func (cs *CStats) GetError() error {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-	return cs.err
-}
-
-// SetErrorAndReset zeroes all the container statistics and store the error.
-// It is used when receiving time out error during statistics collecting to reduce lock overhead
-func (cs *CStats) SetErrorAndReset(err error) {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-	cs.CPUPercentage = 0
-	cs.Memory = 0
-	cs.MemoryPercentage = 0
-	cs.MemoryLimit = 0
-	cs.NetworkRx = 0
-	cs.NetworkTx = 0
-	cs.BlockRead = 0
-	cs.BlockWrite = 0
-	cs.PidsCurrent = 0
-	cs.err = err
-	cs.IsInvalid = true
-}
-
-// SetError sets container statistics error
-func (cs *CStats) SetError(err error) {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-	cs.err = err
-	if err != nil {
-		cs.IsInvalid = true
-	}
-}
-
-// SetStatistics set the container statistics
-func (cs *CStats) SetStatistics(s HumanizeMetrics) {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-	s.ContainerID = cs.ContainerID
-	cs.HumanizeMetrics = s
-}
-
-// GetStatistics returns container statistics with other meta data such as the container name
-func (cs *CStats) GetStatistics() *HumanizeMetrics {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-	return &cs.HumanizeMetrics
-}
-*/
-
 // NewContainerStats returns a new ContainerStats entity and sets in it the given name
-func NewContainerStats(containerID string) *ContainerFMetrics {
-	return &ContainerFMetrics{ContainerID: containerID}
+func NewParsedConatinerMetrics(containerID string) *ParsedConatinerMetrics {
+	return &ParsedConatinerMetrics{ContainerID: containerID}
 }
 
-type ContainerFMetrics struct {
+type ParsedConatinerMetrics struct {
 	ContainerID      string
 	Name             string
 	CPUPercentage    float64
@@ -212,7 +152,7 @@ type ContainerFMetrics struct {
 }
 
 // Deprecated: use Collect(respByte []byte)
-func Set(response types.ContainerStats) (s *ContainerFMetrics) {
+func Set(response types.ContainerStats) (s *ParsedConatinerMetrics) {
 	var (
 		previousCPU    uint64
 		previousSystem uint64
@@ -261,7 +201,7 @@ func Set(response types.ContainerStats) (s *ContainerFMetrics) {
 	return
 }
 
-func Parse(respByte []byte) (*ContainerFMetrics, error) {
+func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 	var (
 		previousCPU    uint64
 		previousSystem uint64
@@ -289,7 +229,7 @@ func Parse(respByte []byte) (*ContainerFMetrics, error) {
 	netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 	//
-	s := &ContainerFMetrics{}
+	s := &ParsedConatinerMetrics{}
 	s.Name = statsJSON.Name[1:]
 	s.ContainerID = statsJSON.ID
 	s.CPUPercentage = cpuPercent
@@ -365,6 +305,6 @@ func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 
 
 //return given the significant digit of flaot64
 func Round(f float64, n int) float64 {
-	pow10_n := math.Pow10(n)
-	return math.Trunc((f+0.5/pow10_n)*pow10_n) / pow10_n
+	pow10N := math.Pow10(n)
+	return math.Trunc((f+0.5/pow10N)*pow10N) / pow10N
 }
