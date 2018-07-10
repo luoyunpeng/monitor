@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	hostURL        = "tcp://ip:2375"
+	hostURL = "tcp://ip:2375"
+	//run 'docker version' at target host to get the version
 	defaultVersion = "1.37"
 )
 
