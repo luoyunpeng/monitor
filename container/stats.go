@@ -68,7 +68,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case event := <-eventq:
 				c <- event
 			case err := <-errq:
-				log.Printf("err happen when list docker event: %v", err)
+				log.Printf("host:"+ip+" err happen when list docker event: %v", err)
 				return
 			}
 		}
@@ -90,7 +90,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			log.Printf("err happen when list all running container: %v", err)
+			log.Printf("host:"+ip+" err happen when list all running container: %v", err)
 			return
 		}
 		for _, container := range cs {
@@ -128,7 +128,8 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// wait event listener go routine started
 	<-started
 
-	// echo running container got one goroutine to collect metrics,
+	// Start a short-lived goroutine to retrieve the initial list of
+	// containers.
 	getContainerList()
 	waitFirst.Wait()
 }
@@ -226,8 +227,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			} else {
 				tmpRead := Round(float64(blkRead)/(1024*1024), 3)
 				tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
-				lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024), 3)-lastBlockRead
-				lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024), 3)-lastBlockWrite
+				lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
+				lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
 			}
 			cfm.PidsCurrent = pidsStatsCurrent
 			cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
