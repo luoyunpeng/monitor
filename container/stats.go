@@ -19,14 +19,16 @@ import (
 
 var (
 	//
-	allHostStack []*hostContainerMStack
-	mu           sync.RWMutex
+	allHostStack  []*hostContainerMStack
+	mu            sync.RWMutex
+	DockerCliList sync.Map
 )
 
 const (
 	defaultReadLength      = 15
 	defaultCollectDuration = 15 * time.Second
 	defaultCollectTimeOut  = 25 * time.Second
+	defaultMaxTimeoutTimes = 5
 )
 
 func initLog(ip string) *log.Logger {
@@ -41,7 +43,8 @@ func initLog(ip string) *log.Logger {
 //each host will run this method only once
 func KeepStats(dockerCli *client.Client, ip string) {
 
-	ctx := context.Background()
+	c := context.Background()
+	ctx, cancel := context.WithCancel(c)
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
@@ -70,6 +73,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case err := <-errq:
 				log.Printf("host:"+ip+" err happen when list docker event: %v", err)
 				return
+			case ctx.Done():
+				log.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
+				DockerCliList.Delete(ip)
+				return
 			}
 		}
 	}
@@ -97,7 +104,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, cms, dockerCli, waitFirst, logger)
+				go collect(ctx, cms, dockerCli, waitFirst, logger, cancel)
 			}
 		}
 	}
@@ -113,7 +120,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, cms, dockerCli, waitFirst, logger)
+			go collect(ctx, cms, dockerCli, waitFirst, logger, cancel)
 		}
 	})
 
@@ -134,7 +141,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	waitFirst.Wait()
 }
 
-func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger) {
+func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc) {
 	var (
 		isFirstCollect                = true
 		u                             = make(chan error, 1)
@@ -154,104 +161,116 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 
 	go func() {
 		for {
-			var (
-				previousCPU    uint64
-				previousSystem uint64
-
-				statsJSON              *types.StatsJSON
-				memPercent, cpuPercent float64
-				blkRead, blkWrite      uint64 // Only used on Linux
-				mem, memLimit          float64
-				pidsStatsCurrent       uint64
-			)
-
-			response, err := cli.ContainerStats(ctx, cms.id, false)
-			// bool value initial value is false
-			if cms.isInvalid {
-				logger.Println(cms.name, " is not running, stop collecting in goroutine")
-				response.Body.Close()
-				u <- errNoSuchC
+			select {
+			case ctx.Done():
+				log.Println("collect " + cms.name + " from docker daemon time out, return")
 				return
-			}
-			if err != nil {
-				logger.Printf("collecting stats for %v", err)
-				if strings.Contains(err.Error(), "No such container") {
+			default:
+				var (
+					previousCPU    uint64
+					previousSystem uint64
+
+					statsJSON              *types.StatsJSON
+					memPercent, cpuPercent float64
+					blkRead, blkWrite      uint64
+					mem, memLimit          float64
+					pidsStatsCurrent       uint64
+				)
+
+				response, err := cli.ContainerStats(ctx, cms.id, false)
+				// bool value initial value is false
+				if cms.isInvalid {
+					logger.Println(cms.name, " is not running, stop collecting in goroutine")
+					response.Body.Close()
 					u <- errNoSuchC
+					return
 				}
-				return
-			}
+				if err != nil {
+					logger.Printf("collecting stats for %v", err)
+					if strings.Contains(err.Error(), "No such container") {
+						u <- errNoSuchC
+					}
+					return
+				}
 
-			respByte, err := ioutil.ReadAll(response.Body)
-			if err != nil {
-				logger.Printf("collecting stats for %v", err)
-				return
-			}
+				respByte, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					logger.Printf("collecting stats for %v", err)
+					return
+				}
 
-			errUnmarshal := json.Unmarshal(respByte, &statsJSON)
-			if errUnmarshal != nil {
-				logger.Printf("Unmarshal collecting stats for %v", errUnmarshal)
-				return
-			}
+				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
+				if errUnmarshal != nil {
+					logger.Printf("Unmarshal collecting stats for %v", errUnmarshal)
+					return
+				}
 
-			previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
-			previousSystem = statsJSON.PreCPUStats.SystemUsage
-			cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
-			blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
-			// change mem related metric to MB
-			mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
-			memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
-			memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
-			pidsStatsCurrent = statsJSON.PidsStats.Current
-			netRx, netTx := CalculateNetwork(statsJSON.Networks)
+				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
+				previousSystem = statsJSON.PreCPUStats.SystemUsage
+				cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
+				blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
+				// change mem related metric to MB
+				mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
+				memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
+				memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
+				pidsStatsCurrent = statsJSON.PidsStats.Current
+				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-			cfm = NewParsedConatinerMetrics(cms.id)
-			cfm.Name = statsJSON.Name[1:]
-			if cms.name == "" {
-				cms.name = cfm.Name
-			}
-			cfm.CPUPercentage = cpuPercent
-			cfm.Memory = mem
-			cfm.MemoryPercentage = memPercent
-			cfm.MemoryLimit = memLimit
-			if isFirstCollect {
-				lastNetworkRX, cfm.NetworkRx = netRx, 0
-				lastNetworkTX, cfm.NetworkTx = netTx, 0
-			} else {
-				lastNetworkRX, cfm.NetworkRx = netRx, Round(netRx-lastNetworkRX, 3)
-				lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
-			}
+				cfm = NewParsedConatinerMetrics(cms.id)
+				cfm.Name = statsJSON.Name[1:]
+				if cms.name == "" {
+					cms.name = cfm.Name
+				}
+				cfm.CPUPercentage = cpuPercent
+				cfm.Memory = mem
+				cfm.MemoryPercentage = memPercent
+				cfm.MemoryLimit = memLimit
+				if isFirstCollect {
+					lastNetworkRX, cfm.NetworkRx = netRx, 0
+					lastNetworkTX, cfm.NetworkTx = netTx, 0
+				} else {
+					lastNetworkRX, cfm.NetworkRx = netRx, Round(netRx-lastNetworkRX, 3)
+					lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
+				}
 
-			if isFirstCollect {
-				lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
-				lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
-			} else {
-				tmpRead := Round(float64(blkRead)/(1024*1024), 3)
-				tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
-				lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
-				lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
+				if isFirstCollect {
+					lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
+					lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
+				} else {
+					tmpRead := Round(float64(blkRead)/(1024*1024), 3)
+					tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
+					lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
+					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
+				}
+				cfm.PidsCurrent = pidsStatsCurrent
+				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+				cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+				cms.put(cfm)
+				u <- nil
+				response.Body.Close()
+				logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+				time.Sleep(defaultCollectDuration)
 			}
-			cfm.PidsCurrent = pidsStatsCurrent
-			cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-			cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-			cms.put(cfm)
-			u <- nil
-			response.Body.Close()
-			logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-			time.Sleep(defaultCollectDuration)
 		}
 	}()
 
+	timeoutTimes := 0
 	for {
 		select {
 		case <-time.After(defaultCollectTimeOut):
 			// zero out the values if we have not received an update within
 			// the specified duration.
+			if timeoutTimes > defaultMaxTimeoutTimes {
+				cancel()
+				return
+			}
 			logger.Println("collect for container-"+cms.name, " time out")
 			// if this is the first stat you get, release WaitGroup
 			if isFirstCollect {
 				isFirstCollect = false
 				waitFirst.Done()
 			}
+			timeoutTimes++
 		case err := <-u:
 			//EOF error
 			if err == io.EOF {
