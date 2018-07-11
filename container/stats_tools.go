@@ -33,7 +33,7 @@ func (s *hostContainerMStack) add(newCms *containerMetricStack) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.isKnownContainer(newCms.id); !exists {
+	if _, exists := s.isKnownContainer(newCms.ID); !exists {
 		s.cms = append(s.cms, newCms)
 		return true
 	}
@@ -53,7 +53,7 @@ func (s *hostContainerMStack) remove(id string) {
 
 func (s *hostContainerMStack) isKnownContainer(cid string) (int, bool) {
 	for i, c := range s.cms {
-		if c.id == cid || c.name == cid {
+		if c.ID == cid || c.ContainerName == cid {
 			return i, true
 		}
 	}
@@ -73,7 +73,7 @@ func (s *hostContainerMStack) allNames() []string {
 
 	var names []string
 	for _, cm := range s.cms {
-		names = append(names, cm.name)
+		names = append(names, cm.ContainerName)
 	}
 
 	return names
@@ -82,16 +82,16 @@ func (s *hostContainerMStack) allNames() []string {
 type containerMetricStack struct {
 	mu sync.RWMutex
 
-	id   string
-	name string
+	ID            string
+	ContainerName string
 
 	csFMetrics []*ParsedConatinerMetrics
 
 	isInvalid bool
 }
 
-func NewContainerMStack(name, id string) *containerMetricStack {
-	return &containerMetricStack{name: name, id: id}
+func NewContainerMStack(ContainerName, id string) *containerMetricStack {
+	return &containerMetricStack{ContainerName: ContainerName, ID: id}
 }
 
 func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
@@ -129,13 +129,11 @@ func (cms *containerMetricStack) length() int {
 }
 
 // NewContainerStats returns a new ContainerStats entity and sets in it the given name
-func NewParsedConatinerMetrics(containerID string) *ParsedConatinerMetrics {
-	return &ParsedConatinerMetrics{ContainerID: containerID}
+func NewParsedConatinerMetrics() *ParsedConatinerMetrics {
+	return &ParsedConatinerMetrics{}
 }
 
 type ParsedConatinerMetrics struct {
-	ContainerID      string
-	Name             string
 	CPUPercentage    float64
 	Memory           float64
 	MemoryLimit      float64
@@ -186,8 +184,6 @@ func Set(response types.ContainerStats) (s *ParsedConatinerMetrics) {
 	netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 	//
-	s.Name = statsJSON.Name
-	s.ContainerID = statsJSON.ID
 	s.CPUPercentage = cpuPercent
 	fmt.Println(s.CPUPercentage)
 	s.Memory = mem
@@ -230,8 +226,8 @@ func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 
 	//
 	s := &ParsedConatinerMetrics{}
-	s.Name = statsJSON.Name[1:]
-	s.ContainerID = statsJSON.ID
+	//s.Name = statsJSON.Name[1:]
+	//s.ContainerID = statsJSON.ID
 	s.CPUPercentage = cpuPercent
 	s.Memory = mem
 	s.MemoryPercentage = memPercent
