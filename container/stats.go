@@ -73,7 +73,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case err := <-errq:
 				log.Printf("host:"+ip+" err happen when list docker event: %v", err)
 				return
-			case ctx.Done():
+			case <-ctx.Done():
 				log.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
 				DockerCliList.Delete(ip)
 				return
@@ -162,7 +162,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	go func() {
 		for {
 			select {
-			case ctx.Done():
+			case <-ctx.Done():
 				log.Println("collect " + cms.name + " from docker daemon time out, return")
 				return
 			default:
