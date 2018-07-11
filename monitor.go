@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -25,7 +24,6 @@ import (
 var (
 	dockerCli *client.Client
 	hostsIPs  = []string{"localhost"}
-	list      sync.Map
 )
 
 func init() {
@@ -40,7 +38,7 @@ func init() {
 				fmt.Printf("pre init docker client for localhost failed: %v", err)
 				return
 			}
-			list.Store(ip, dockerCli)
+			container.DockerCliList.Store(ip, dockerCli)
 		}
 	}
 
@@ -77,7 +75,7 @@ func main() {
 					continue
 				}
 				go container.KeepStats(cli, ip)
-				list.Store(ip, cli)
+				container.DockerCliList.Store(ip, cli)
 			}
 		}
 	}()
@@ -383,7 +381,7 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	if cliTmp, isLoaded := list.Load(hostName); isLoaded {
+	if cliTmp, isLoaded := container.DockerCliList.Load(hostName); isLoaded {
 		if cli, ok := cliTmp.(*client.Client); ok {
 			logBody, err := cli.ContainerLogs(context.Background(), id, logOptions)
 			if err != nil {
