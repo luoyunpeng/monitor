@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
@@ -163,7 +163,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("collect " + cms.name + " from docker daemon time out, return")
+				log.Println("collect " + cms.ContainerName + " from docker daemon time out, return")
 				return
 			default:
 				var (
@@ -177,19 +177,19 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 					pidsStatsCurrent       uint64
 				)
 
-				response, err := cli.ContainerStats(ctx, cms.id, false)
+				response, err := cli.ContainerStats(ctx, cms.ID, false)
 				// bool value initial value is false
 				if cms.isInvalid {
-					logger.Println(cms.name, " is not running, stop collecting in goroutine")
-					response.Body.Close()
+					logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
+					if response.Body != nil {
+						response.Body.Close()
+					}
 					u <- errNoSuchC
 					return
 				}
 				if err != nil {
 					logger.Printf("collecting stats for %v", err)
-					if strings.Contains(err.Error(), "No such container") {
-						u <- errNoSuchC
-					}
+					u <- err
 					return
 				}
 
@@ -216,10 +216,9 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				pidsStatsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-				cfm = NewParsedConatinerMetrics(cms.id)
-				cfm.Name = statsJSON.Name[1:]
-				if cms.name == "" {
-					cms.name = cfm.Name
+				cfm = NewParsedConatinerMetrics()
+				if cms.ContainerName == "" {
+					cms.ContainerName = statsJSON.Name[1:]
 				}
 				cfm.CPUPercentage = cpuPercent
 				cfm.Memory = mem
@@ -248,7 +247,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				cms.put(cfm)
 				u <- nil
 				response.Body.Close()
-				logger.Println(cfm.ContainerID, cfm.Name, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -261,28 +260,31 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes > defaultMaxTimeoutTimes {
+				_, err := cli.Ping(ctx)
+				if err != nil {
+					log.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+				}
 				cancel()
 				return
 			}
-			logger.Println("collect for container-"+cms.name, " time out")
 			// if this is the first stat you get, release WaitGroup
 			if isFirstCollect {
 				isFirstCollect = false
 				waitFirst.Done()
 			}
 			timeoutTimes++
+			logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
 		case err := <-u:
 			//EOF error
 			if err == io.EOF {
 				break
 			}
 			if err == errNoSuchC {
-				logger.Println(cms.name, " is not running, return")
+				logger.Println(cms.ContainerName, " is not running, return")
 				return
-			}
-
-			if err != nil {
-				continue
+			} else if err != nil {
+				logger.Printf("err happen in collector %v", err)
+				return
 			}
 			// if this is the first stat you get, release WaitGroup
 			if isFirstCollect {
@@ -310,7 +312,7 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 				return nil, errors.New("not one container is running")
 			}
 			for _, containerStack := range hoststack.cms {
-				if containerStack.id == id || containerStack.name == id {
+				if containerStack.ID == id || containerStack.ContainerName == id {
 					return containerStack.read(defaultReadLength), nil
 				}
 			}
