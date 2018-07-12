@@ -169,7 +169,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		for {
 			select {
 			case <-ctx.Done():
-				logger.Println("collect " + cms.ContainerName + " from docker daemon time out, return")
+				logger.Println("collector for  " + cms.ContainerName + " from docker daemon canceled, return")
 				return
 			default:
 				var (
@@ -312,6 +312,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				isFirstCollect = false
 				waitFirst.Done()
 			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
