@@ -50,7 +50,11 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
 		defer func() {
 			close(c)
-			dockerCli.Close()
+			if dockerCli != nil {
+				log.Println("close docker cli from " + ip + ", and remove it from DockerCliList ")
+				dockerCli.Close()
+				DockerCliList.Delete(ip)
+			}
 		}()
 
 		f := filters.NewArgs()
@@ -75,7 +79,6 @@ func KeepStats(dockerCli *client.Client, ip string) {
 				return
 			case <-ctx.Done():
 				log.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
-				DockerCliList.Delete(ip)
 				return
 			}
 		}
@@ -144,11 +147,13 @@ func KeepStats(dockerCli *client.Client, ip string) {
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc) {
 	var (
 		isFirstCollect                = true
-		u                             = make(chan error, 1)
-		errNoSuchC                    = errors.New("no such container")
 		cfm                           *ParsedConatinerMetrics
 		lastNetworkTX, lastNetworkRX  float64
 		lastBlockRead, lastBlockWrite float64
+
+		u               = make(chan error, 1)
+		errNoSuchC      = errors.New("no such container")
+		dockerDaemonErr error
 	)
 
 	defer func() {
@@ -180,29 +185,39 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				response, err := cli.ContainerStats(ctx, cms.ID, false)
 				// bool value initial value is false
 				if cms.isInvalid {
-					logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 					if response.Body != nil {
 						response.Body.Close()
 					}
+					//container stop or rm event happened or others(event that lead to stop the container), return collecting goroutine
 					u <- errNoSuchC
 					return
 				}
 				if err != nil {
-					logger.Printf("collecting stats for %v", err)
-					u <- err
+					dockerDaemonErr = err
+					u <- dockerDaemonErr
 					return
 				}
 
 				respByte, err := ioutil.ReadAll(response.Body)
 				if err != nil {
-					logger.Printf("collecting stats for %v", err)
-					return
+					logger.Printf("ioutil read from response body  for "+cms.ContainerName+" err occured: %v", err)
+					u <- err
+					if err == io.EOF {
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+					continue
 				}
 
 				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 				if errUnmarshal != nil {
-					logger.Printf("Unmarshal collecting stats for %v", errUnmarshal)
-					return
+					logger.Printf("Unmarshal collecting stats for "+cms.ContainerName+" err occured: %v", errUnmarshal)
+					u <- errUnmarshal
+					if errUnmarshal == io.EOF {
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+					continue
 				}
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
@@ -275,17 +290,22 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			timeoutTimes++
 			logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
 		case err := <-u:
-			//EOF error
+			//EOF error maybe mean docker daemon err
 			if err == io.EOF {
 				break
 			}
+
 			if err == errNoSuchC {
-				logger.Println(cms.ContainerName, " is not running, return")
+				logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 				return
-			} else if err != nil {
-				logger.Printf("err happen in collector %v", err)
+			} else if err == dockerDaemonErr {
+				logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
 				return
 			}
+			if err != nil {
+				continue
+			}
+			//if err is nil mean collect metrics successfully
 			// if this is the first stat you get, release WaitGroup
 			if isFirstCollect {
 				isFirstCollect = false
