@@ -124,26 +124,6 @@ func ContainerStats(ctx *gin.Context) {
 		return
 	}
 	ctx.JSONP(http.StatusOK, hstats)
-	/*
-		resp, err := dockerCli.ContainerStats(context.Background(), id, false)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, err)
-			return
-		}
-		defer resp.Body.Close()
-
-		respByte, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, err)
-			return
-		}
-
-		hstats, err := container.Collect(respByte)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, err)
-			return
-		}
-	*/
 }
 
 func ContainerMem(ctx *gin.Context) {
