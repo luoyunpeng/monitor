@@ -45,13 +45,14 @@ func KeepStats(dockerCli *client.Client, ip string) {
 
 	c := context.Background()
 	ctx, cancel := context.WithCancel(c)
+	logger := initLog(ip)
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
 		defer func() {
 			close(c)
 			if dockerCli != nil {
-				log.Println("close docker cli from " + ip + ", and remove it from DockerCliList ")
+				logger.Println("close docker cli from " + ip + ", and remove it from DockerCliList ")
 				dockerCli.Close()
 				DockerCliList.Delete(ip)
 			}
@@ -75,10 +76,11 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case event := <-eventq:
 				c <- event
 			case err := <-errq:
-				log.Printf("host:"+ip+" err happen when list docker event: %v", err)
+				logger.Printf("host:"+ip+" err happen when list docker event: %v", err)
+				cancel()
 				return
 			case <-ctx.Done():
-				log.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
+				logger.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
 				return
 			}
 		}
@@ -89,7 +91,6 @@ func KeepStats(dockerCli *client.Client, ip string) {
 
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
-	logger := initLog(ip)
 	hcmsStack := NewHostCMStack(ip)
 	addToAllHostStack(hcmsStack)
 	//allHostStack = append(allHostStack, hcmsStack)
@@ -100,7 +101,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			log.Printf("host:"+ip+" err happen when list all running container: %v", err)
+			logger.Printf("host:"+ip+" err happen when list all running container: %v", err)
 			return
 		}
 		for _, container := range cs {
@@ -168,7 +169,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("collect " + cms.ContainerName + " from docker daemon time out, return")
+				logger.Println("collect " + cms.ContainerName + " from docker daemon time out, return")
 				return
 			default:
 				var (
@@ -277,7 +278,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			if timeoutTimes > defaultMaxTimeoutTimes {
 				_, err := cli.Ping(ctx)
 				if err != nil {
-					log.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+					logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
 				}
 				cancel()
 				return
@@ -298,7 +299,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 			if err == errNoSuchC {
 				logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 				return
-			} else if err == dockerDaemonErr {
+			} else if err != nil && err == dockerDaemonErr {
 				logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
 				return
 			}
