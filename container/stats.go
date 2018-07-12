@@ -42,9 +42,7 @@ func initLog(ip string) *log.Logger {
 
 //each host will run this method only once
 func KeepStats(dockerCli *client.Client, ip string) {
-
-	c := context.Background()
-	ctx, cancel := context.WithCancel(c)
+	ctx, cancel := context.WithCancel(context.Background())
 	logger := initLog(ip)
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
@@ -52,7 +50,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		defer func() {
 			close(c)
 			if dockerCli != nil {
-				logger.Println("close docker cli from " + ip + ", and remove it from DockerCliList ")
+				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList ")
 				dockerCli.Close()
 				DockerCliList.Delete(ip)
 			}
@@ -76,7 +74,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case event := <-eventq:
 				c <- event
 			case err := <-errq:
-				logger.Printf("host:"+ip+" err happen when list docker event: %v", err)
+				logger.Printf("host:"+ip+" err happen when listen docker event: %v", err)
 				cancel()
 				return
 			case <-ctx.Done():
@@ -101,7 +99,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			logger.Printf("host:"+ip+" err happen when list all running container: %v", err)
+			logger.Printf("host:"+ip+" err happen when get all running container: %v", err)
 			return
 		}
 		for _, container := range cs {

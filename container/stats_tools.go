@@ -1,8 +1,6 @@
 package container
 
 import (
-	"fmt"
-	"io"
 	"math"
 	"strings"
 	"sync"
@@ -84,8 +82,7 @@ type containerMetricStack struct {
 
 	ID            string
 	ContainerName string
-
-	csFMetrics []*ParsedConatinerMetrics
+	csFMetrics    []*ParsedConatinerMetrics
 
 	isInvalid bool
 }
@@ -147,54 +144,6 @@ type ParsedConatinerMetrics struct {
 	//time
 	ReadTime    string
 	PreReadTime string
-}
-
-// Deprecated: use Collect(respByte []byte)
-func Set(response types.ContainerStats) (s *ParsedConatinerMetrics) {
-	var (
-		previousCPU    uint64
-		previousSystem uint64
-	)
-
-	dec := json.NewDecoder(response.Body)
-
-	var (
-		statsJSON              *types.StatsJSON
-		memPercent, cpuPercent float64
-		blkRead, blkWrite      uint64 // Only used on Linux
-		mem, memLimit          float64
-		pidsStatsCurrent       uint64
-	)
-
-	if err := dec.Decode(&statsJSON); err != nil {
-		dec = json.NewDecoder(io.MultiReader(dec.Buffered(), response.Body))
-		if err == io.EOF {
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
-	previousSystem = statsJSON.PreCPUStats.SystemUsage
-	cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
-	blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
-	mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
-	memLimit = float64(statsJSON.MemoryStats.Limit)
-	memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
-	pidsStatsCurrent = statsJSON.PidsStats.Current
-	netRx, netTx := CalculateNetwork(statsJSON.Networks)
-
-	//
-	s.CPUPercentage = cpuPercent
-	fmt.Println(s.CPUPercentage)
-	s.Memory = mem
-	s.MemoryPercentage = memPercent
-	s.MemoryLimit = memLimit
-	s.NetworkRx = netRx
-	s.NetworkTx = netTx
-	s.BlockRead = float64(blkRead)
-	s.BlockWrite = float64(blkWrite)
-	s.PidsCurrent = pidsStatsCurrent
-	return
 }
 
 func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
@@ -299,7 +248,7 @@ func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 
 	return 0
 }
 
-//return given the significant digit of flaot64
+//return given the significant digit of float64
 func Round(f float64, n int) float64 {
 	pow10N := math.Pow10(n)
 	return math.Trunc((f+0.5/pow10N)*pow10N) / pow10N
