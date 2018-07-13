@@ -343,7 +343,7 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	return nil, errors.New("given container name or id is unknown, or container is not running")
 }
 
-func GetCInfo(host string) []string {
+func GetHostContainerInfo(host string) []string {
 	for _, hoststack := range allHostStack {
 		if hoststack.hostName == host {
 			if hoststack.length() == 0 {
