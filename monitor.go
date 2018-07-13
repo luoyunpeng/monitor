@@ -22,26 +22,13 @@ import (
 )
 
 var (
-	dockerCli *client.Client
-	hostsIPs  = []string{"localhost"}
+	hostIPs = []string{"localhost"}
 )
 
 func init() {
-	var err error
-	if len(hostsIPs) == 0 {
-		panic("at least one host must be given")
+	if len(hostIPs) == 0 {
+		panic("at least one host must given")
 	}
-	for _, ip := range hostsIPs {
-		if ip == "localhost" {
-			dockerCli, err = common.InitClient("localhost")
-			if err != nil {
-				fmt.Printf("pre init docker client for localhost failed: %v", err)
-				return
-			}
-			container.DockerCliList.Store(ip, dockerCli)
-		}
-	}
-
 	if runtime.NumCPU() >= 4 {
 		numProces := runtime.NumCPU() / 2
 		runtime.GOMAXPROCS(numProces)
@@ -64,21 +51,15 @@ func main() {
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
-	go func() {
-		for _, ip := range hostsIPs {
-			if ip == "localhost" {
-				go container.KeepStats(dockerCli, ip)
-			} else {
-				cli, err := common.InitClient(ip)
-				if err != nil {
-					log.Println("connect to ", ip, " err :", err)
-					continue
-				}
-				go container.KeepStats(cli, ip)
-				container.DockerCliList.Store(ip, cli)
-			}
+	for _, ip := range hostIPs {
+		cli, err := common.InitClient(ip)
+		if err != nil {
+			log.Println("connect to ", ip, " err :", err)
+			continue
 		}
-	}()
+		go container.KeepStats(cli, ip)
+		container.DockerCliList.Store(ip, cli)
+	}
 
 	router.Run()
 }
@@ -312,7 +293,7 @@ func ContainerInfo(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-	cinfo.Names = container.GetCInfo(hostName)
+	cinfo.Names = container.GetHostContainerInfo(hostName)
 	if cinfo.Names == nil {
 		ctx.JSONP(http.StatusNotFound, "stack got no container metrics")
 		return
@@ -442,7 +423,7 @@ func checkParam(id, hostName string) error {
 	}
 
 	isHostKnown := false
-	for _, h := range hostsIPs {
+	for _, h := range hostIPs {
 		if hostName == h {
 			isHostKnown = true
 		}
