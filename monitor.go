@@ -304,10 +304,7 @@ func ContainerInfo(ctx *gin.Context) {
 
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		if r.Header.Get("Origin") != "http://"+r.Host {
-			return true
-		}
-		return false
+		return true
 	},
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
