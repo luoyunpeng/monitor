@@ -304,11 +304,15 @@ func ContainerInfo(ctx *gin.Context) {
 
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		if r.Header.Get("Origin") != "http://"+r.Host {
+			return true
+		}
+		return false
 	},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
 }
 
-//upgrade this handler to web socket
 func ContainerLogs(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -352,31 +356,23 @@ func ContainerLogs(ctx *gin.Context) {
 			defer logBody.Close()
 
 			//read message from ws(websocket)
-			mt, _, err := ws.ReadMessage()
-			if err != nil {
-				err = ws.WriteMessage(1, []byte(err.Error()))
-				if err != nil {
-					fmt.Printf("err occured when get log from container: %v", err)
+			go func() {
+				for {
+					if _, _, err := ws.NextReader(); err != nil {
+						break
+					}
 				}
-				return
-			}
-			// write container log to ws
-			/*rr := dlog.NewReader(logBody)
-			s := bufio.NewScanner(rr)
-			for s.Scan() {
-				err = ws.WriteMessage(mt, s.Bytes())
-				if err != nil {
-					fmt.Printf("err occured when get log from container: %v", err)
-					return
-				}
-			}*/
+			}()
+
+			//write container log
 			br := bufio.NewReader(logBody)
 			for {
 				lineBytes, err := br.ReadBytes('\n')
 				if err != nil {
 					break
 				}
-				err = ws.WriteMessage(mt, lineBytes[8:])
+				//
+				err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
 				if err != nil {
 					fmt.Printf("err occured when get log from container: %v", err)
 					return
