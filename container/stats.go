@@ -319,7 +319,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 
 func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
-		if hoststack, ok := hoststackTmp.(HostContainerMetricStack); ok {
+		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
 				if containerStack.ID == id || containerStack.ContainerName == id {
 					return containerStack.read(defaultReadLength), nil
