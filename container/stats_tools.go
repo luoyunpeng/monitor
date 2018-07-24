@@ -16,18 +16,18 @@ var (
 )
 
 //one docker host have only one hostContainerMStack
-type hostContainerMStack struct {
+type HostContainerMetricStack struct {
 	mu sync.RWMutex
 	//indicate which host this stats belong to
 	hostName string
 	cms      []*containerMetricStack
 }
 
-func NewHostCMStack(host string) *hostContainerMStack {
-	return &hostContainerMStack{hostName: host}
+func NewHostContainerMetricStack(host string) *HostContainerMetricStack {
+	return &HostContainerMetricStack{hostName: host}
 }
 
-func (s *hostContainerMStack) add(newCms *containerMetricStack) bool {
+func (s *HostContainerMetricStack) add(newCms *containerMetricStack) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (s *hostContainerMStack) add(newCms *containerMetricStack) bool {
 	return false
 }
 
-func (s *hostContainerMStack) remove(id string) {
+func (s *HostContainerMetricStack) remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -49,7 +49,7 @@ func (s *hostContainerMStack) remove(id string) {
 	}
 }
 
-func (s *hostContainerMStack) isKnownContainer(cid string) (int, bool) {
+func (s *HostContainerMetricStack) isKnownContainer(cid string) (int, bool) {
 	for i, c := range s.cms {
 		if c.ID == cid || c.ContainerName == cid {
 			return i, true
@@ -58,14 +58,14 @@ func (s *hostContainerMStack) isKnownContainer(cid string) (int, bool) {
 	return -1, false
 }
 
-func (s *hostContainerMStack) length() int {
+func (s *HostContainerMetricStack) length() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	return len(s.cms)
 }
 
-func (s *hostContainerMStack) allNames() []string {
+func (s *HostContainerMetricStack) allNames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
