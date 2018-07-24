@@ -19,8 +19,8 @@ import (
 
 var (
 	//
-	allHostStack  []*hostContainerMStack
-	mu            sync.RWMutex
+	allHostStack  []*HostContainerMetricStack
+	AllHostList   sync.Map
 	DockerCliList sync.Map
 )
 
@@ -53,6 +53,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList ")
 				dockerCli.Close()
 				DockerCliList.Delete(ip)
+				AllHostList.Delete(ip)
 			}
 		}()
 
@@ -87,12 +88,11 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
 
+	hcmsStack := NewHostContainerMetricStack(ip)
+	AllHostList.Store(ip, hcmsStack)
+	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
-	hcmsStack := NewHostCMStack(ip)
-	addToAllHostStack(hcmsStack)
-	//allHostStack = append(allHostStack, hcmsStack)
-	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	getContainerList := func() {
 		options := types.ContainerListOptions{
 			All: false,
@@ -141,6 +141,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
+	logger.Println("host-" + ip + " collect for all running container successfull")
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc) {
@@ -223,7 +224,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				previousSystem = statsJSON.PreCPUStats.SystemUsage
 				cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
 				blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
-				// change mem related metric to MB
+				// default mem related metric unit is MB
 				mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
 				memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
 				memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
@@ -316,31 +317,19 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	}
 }
 
-func addToAllHostStack(stack *hostContainerMStack) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	allHostStack = append(allHostStack, stack)
-}
-
 func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	for _, hoststack := range allHostStack {
-		if hoststack.hostName == host {
-			if hoststack.length() == 0 {
-				return nil, errors.New("not one container is running")
-			}
+	if hoststackTmp, ok := AllHostList.Load(host); ok {
+		if hoststack, ok := hoststackTmp.(HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
 				if containerStack.ID == id || containerStack.ContainerName == id {
 					return containerStack.read(defaultReadLength), nil
+				} else {
+					return nil, errors.New("given container name or id is unknown, or container is not running")
 				}
 			}
 		}
 	}
-
-	return nil, errors.New("given container name or id is unknown, or container is not running")
+	return nil, errors.New("given host " + host + " is not loaded")
 }
 
 func GetHostContainerInfo(host string) []string {
