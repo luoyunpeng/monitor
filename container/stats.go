@@ -323,10 +323,9 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 			for _, containerStack := range hoststack.cms {
 				if containerStack.ID == id || containerStack.ContainerName == id {
 					return containerStack.read(defaultReadLength), nil
-				} else {
-					return nil, errors.New("given container name or id is unknown, or container is not running")
 				}
 			}
+			return nil, errors.New("given container name or id is unknown, or container is not running")
 		}
 	}
 	return nil, errors.New("given host " + host + " is not loaded")
