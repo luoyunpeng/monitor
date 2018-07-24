@@ -88,7 +88,7 @@ type containerMetricStack struct {
 }
 
 func NewContainerMStack(ContainerName, id string) *containerMetricStack {
-	return &containerMetricStack{ContainerName: ContainerName, ID: id}
+	return &containerMetricStack{ContainerName: ContainerName, ID: id, csFMetrics: make([]*ParsedConatinerMetrics, defaultReadLength)}
 }
 
 func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {

@@ -18,8 +18,6 @@ import (
 )
 
 var (
-	//
-	allHostStack  []*HostContainerMetricStack
 	AllHostList   sync.Map
 	DockerCliList sync.Map
 )
@@ -332,12 +330,11 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 }
 
 func GetHostContainerInfo(host string) []string {
-	for _, hoststack := range allHostStack {
-		if hoststack.hostName == host {
-			if hoststack.length() == 0 {
-				return nil
+	if hoststackTmp, ok := AllHostList.Load(host); ok {
+		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
+			if hoststack.hostName == host {
+				return hoststack.allNames()
 			}
-			return hoststack.allNames()
 		}
 	}
 
