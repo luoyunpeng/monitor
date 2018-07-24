@@ -88,14 +88,14 @@ type containerMetricStack struct {
 }
 
 func NewContainerMStack(ContainerName, id string) *containerMetricStack {
-	return &containerMetricStack{ContainerName: ContainerName, ID: id, csFMetrics: make([]*ParsedConatinerMetrics, defaultReadLength)}
+	return &containerMetricStack{ContainerName: ContainerName, ID: id}
 }
 
 func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
 	defer cms.mu.Unlock()
 
-	if len(cms.csFMetrics) == 15 {
+	if len(cms.csFMetrics) == defaultReadLength {
 		//cms.csFMetrics = append(cms.csFMetrics, cfm)
 		//delete the first one also the oldest one, and append the latest one
 		cms.csFMetrics = append(cms.csFMetrics[1:], cfm)
