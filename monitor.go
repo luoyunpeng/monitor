@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/http/pprof"
 	"runtime"
 	"strconv"
 	"strings"
@@ -51,6 +52,23 @@ func main() {
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
+	//for profiling
+	v1.GET("/debug/pprof/", func(ctx *gin.Context) {
+		pprof.Index(ctx.Writer, ctx.Request)
+	})
+	v1.GET("/debug/pprof/cmdline", func(ctx *gin.Context) {
+		pprof.Cmdline(ctx.Writer, ctx.Request)
+	})
+	v1.GET("/debug/pprof/profile", func(ctx *gin.Context) {
+		pprof.Profile(ctx.Writer, ctx.Request)
+	})
+	v1.GET("/debug/pprof/symbol", func(ctx *gin.Context) {
+		pprof.Symbol(ctx.Writer, ctx.Request)
+	})
+	v1.GET("/debug/pprof/trace", func(ctx *gin.Context) {
+		pprof.Trace(ctx.Writer, ctx.Request)
+	})
+
 	for _, ip := range hostIPs {
 		cli, err := common.InitClient(ip)
 		if err != nil {
@@ -63,33 +81,6 @@ func main() {
 
 	router.Run()
 }
-
-/*
-func AccessJsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		w := c.Writer
-		r := c.Request
-		// deal js-ajax cors issue
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-		w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, POST")
-		w.Header().Add("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Add("Access-Control-Allow-Headers", "Access-Token")
-
-		//
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Headers", "access-control-allow-origin, access-control-allow-headers")
-		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		// c.Header("Access-Control-Allow-Headers", "Authorization, Content-Length, X-CSRF-Token, Accept, Origin, Host, Connection, Accept-Encoding, Accept-Language,DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Pragma")
-		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type")
-		// c.Header("Access-Control-Max-Age", "172800")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Set("content-type", "application/json")
-		//
-		c.Next()
-	}
-}
-*/
 
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
