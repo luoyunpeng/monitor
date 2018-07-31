@@ -16,7 +16,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/luoyunpeng/monitor/common"
-	)
+)
 
 var (
 	AllHostList   sync.Map
@@ -26,7 +26,7 @@ var (
 const (
 	defaultReadLength      = 15
 	defaultCollectDuration = 15 * time.Second
-	defaultCollectTimeOut  = defaultCollectDuration + 10
+	defaultCollectTimeOut  = defaultCollectDuration + time.Second*10
 	defaultMaxTimeoutTimes = 5
 )
 
