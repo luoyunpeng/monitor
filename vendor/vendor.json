@@ -207,6 +207,26 @@
 			"revisionTime": "2018-06-05T20:25:52Z"
 		},
 		{
+			"checksumSHA1": "t06GpE7X4olsyp2d26RuKCDzC7w=",
+			"path": "github.com/influxdata/influxdb/client/v2",
+			"revision": "62ab18a0f43ee342b84debaaae5486b8b2d8682c",
+			"revisionTime": "2018-06-28T21:56:46Z",
+			"version": "v1.6.0",
+			"versionExact": "v1.6.0"
+		},
+		{
+			"checksumSHA1": "8bMEm2PdAkKaqpLFilmT9MC1j1c=",
+			"path": "github.com/influxdata/influxdb/models",
+			"revision": "0a4d46aedbb2a00faf4381776175a4b1ff262ca8",
+			"revisionTime": "2018-07-26T17:47:34Z"
+		},
+		{
+			"checksumSHA1": "Z0Bb5PWa5WL/j5Dm2KJCLGn1l7U=",
+			"path": "github.com/influxdata/influxdb/pkg/escape",
+			"revision": "0a4d46aedbb2a00faf4381776175a4b1ff262ca8",
+			"revisionTime": "2018-07-26T17:47:34Z"
+		},
+		{
 			"checksumSHA1": "66skRjpx6iDbz6OUSLwmBvPSDUs=",
 			"path": "github.com/json-iterator/go",
 			"revision": "ab8a2e0c74be9d3be70b3184d9acc634935ded82",
