@@ -143,7 +143,7 @@ type ParsedConatinerMetrics struct {
 
 	//time
 	ReadTime    string
-	PreReadTime string
+	ReadTimeForInfluxDB time.Time
 }
 
 func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
@@ -187,7 +187,7 @@ func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 	s.BlockWrite = float64(blkWrite)
 	s.PidsCurrent = pidsStatsCurrent
 	s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-	s.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+	s.ReadTimeForInfluxDB =  statsJSON.Read.Add(time.Hour * 8)
 	return s, nil
 }
 
