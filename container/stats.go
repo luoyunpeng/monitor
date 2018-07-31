@@ -15,7 +15,8 @@ import (
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-)
+	"github.com/luoyunpeng/monitor/common"
+	)
 
 var (
 	AllHostList   sync.Map
@@ -25,7 +26,7 @@ var (
 const (
 	defaultReadLength      = 15
 	defaultCollectDuration = 15 * time.Second
-	defaultCollectTimeOut  = 25 * time.Second
+	defaultCollectTimeOut  = defaultCollectDuration + 10
 	defaultMaxTimeoutTimes = 5
 )
 
@@ -104,7 +105,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, cms, dockerCli, waitFirst, logger, cancel)
+				go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
 			}
 		}
 	}
@@ -120,7 +121,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, cms, dockerCli, waitFirst, logger, cancel)
+			go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
 		}
 	})
 
@@ -142,7 +143,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	logger.Println("host-" + ip + " collect for all running container successfull")
 }
 
-func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc) {
+func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
 	var (
 		isFirstCollect                = true
 		cfm                           *ParsedConatinerMetrics
@@ -256,11 +257,12 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				}
 				cfm.PidsCurrent = pidsStatsCurrent
 				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-				cfm.PreReadTime = statsJSON.PreRead.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+				cfm.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
 				cms.put(cfm)
 				u <- nil
 				response.Body.Close()
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+				go WriteToInfluxDB(host, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -339,4 +341,43 @@ func GetHostContainerInfo(host string) []string {
 	}
 
 	return nil
+}
+
+func WriteToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
+	var fields map[string]interface{}
+	measurements := []string{"cpu", "mem", "networkTX", "networkRX", "blockRead", "blockWrite"}
+	tags := map[string]string{
+		"host": host,
+		"name": containerName,
+	}
+
+	for _, measurement := range measurements {
+		switch measurement {
+		case "cpu":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.CPUPercentage,
+			}
+		case "mem":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.Memory,
+			}
+		case "networkTX":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.NetworkTx,
+			}
+		case "networkRX":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.NetworkRx,
+			}
+		case "blockRead":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.BlockRead,
+			}
+		case "blockWrite":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.BlockWrite,
+			}
+		}
+		go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+	}
 }
