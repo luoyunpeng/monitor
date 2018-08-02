@@ -49,7 +49,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		defer func() {
 			close(c)
 			if dockerCli != nil {
-				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList ")
+				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList and host list ")
 				dockerCli.Close()
 				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
@@ -141,6 +141,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	getContainerList()
 	waitFirst.Wait()
 	logger.Println("host-" + ip + " collect for all running container successfull")
+	go WriteDockerHostInfoToInfluxdb(ctx, dockerCli, ip, logger)
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
@@ -262,7 +263,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				u <- nil
 				response.Body.Close()
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-				go WriteToInfluxDB(host, cms.ContainerName, cfm)
+				go WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -343,9 +344,9 @@ func GetHostContainerInfo(host string) []string {
 	return nil
 }
 
-func WriteToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
+func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
 	var fields map[string]interface{}
-	measurements := []string{"cpu", "mem", "networkTX", "networkRX", "blockRead", "blockWrite"}
+	measurements := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
 	tags := map[string]string{
 		"host": host,
 		"name": containerName,
@@ -360,6 +361,10 @@ func WriteToInfluxDB(host, containerName string, containerMetrics *ParsedConatin
 		case "mem":
 			fields = map[string]interface{}{
 				measurement: containerMetrics.Memory,
+			}
+		case "memLimit":
+			fields = map[string]interface{}{
+				measurement: containerMetrics.MemoryLimit,
 			}
 		case "networkTX":
 			fields = map[string]interface{}{
@@ -379,5 +384,38 @@ func WriteToInfluxDB(host, containerName string, containerMetrics *ParsedConatin
 			}
 		}
 		go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+	}
+}
+
+func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host string, logger *log.Logger) {
+	measurement := "dockerHostInfo"
+	fields := make(map[string]interface{})
+	tags := map[string]string{
+		"host": host,
+	}
+	//TODO, created, restarting, running, removing, paused, exited and dead ,for show docker container status on grafana
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Println("cancel for writing docker host- " + host + " to influxdb")
+			return
+		default:
+			info, err := cli.Info(ctx)
+			if err != nil {
+				logger.Printf("get docker host info error occured: %v", err)
+				return
+			}
+			fields["hostName"] = info.Name
+			fields["imagesLen"] = info.Images
+			fields["containerTotal"] = info.Containers
+			fields["containerRunning"] = info.ContainersRunning
+			fields["containersStopped"] = info.ContainersStopped
+			fields["ncpu"] = info.NCPU
+			fields["containersStopped"] = info.MemTotal / (1024 * 1024 * 1024)
+			fields["kernelVersion"] = info.KernelVersion
+			fields["KernelVersion"] = info.OperatingSystem + info.Architecture
+			go common.Write(measurement, tags, fields, time.Now())
+			time.Sleep(defaultCollectDuration)
+		}
 	}
 }
