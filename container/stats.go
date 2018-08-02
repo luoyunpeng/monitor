@@ -411,9 +411,9 @@ func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host
 			fields["containerRunning"] = info.ContainersRunning
 			fields["containersStopped"] = info.ContainersStopped
 			fields["ncpu"] = info.NCPU
-			fields["containersStopped"] = info.MemTotal / (1024 * 1024 * 1024)
+			fields["totalMem"] = info.MemTotal / (1024 * 1024 * 1024)
 			fields["kernelVersion"] = info.KernelVersion
-			fields["KernelVersion"] = info.OperatingSystem + info.Architecture
+			fields["os"] = info.OperatingSystem + info.Architecture
 			go common.Write(measurement, tags, fields, time.Now())
 			time.Sleep(defaultCollectDuration)
 		}
