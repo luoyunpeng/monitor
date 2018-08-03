@@ -404,7 +404,7 @@ func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host
 			if hoststackTmp, ok := AllHostList.Load(host); ok {
 				if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 					if hoststack.hostName == host {
-						fields["ContainerMemUsed"] = hoststack.getAllLastMemory()
+						fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()/float64(info.MemTotal/(1024*1024)), 2)
 					}
 				}
 			}
