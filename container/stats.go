@@ -345,43 +345,30 @@ func GetHostContainerInfo(host string) []string {
 }
 
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
-	var fields map[string]interface{}
-	measurements := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
+	fields := make(map[string]interface{})
+	fileKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
+	measurement := "hostContainerMetric"
 	tags := map[string]string{
 		"host": host,
 		"name": containerName,
 	}
 
-	for _, measurement := range measurements {
-		switch measurement {
+	for _, fKey := range fileKeys {
+		switch fKey {
 		case "cpu":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.CPUPercentage,
-			}
+			fields[fKey] = containerMetrics.CPUPercentage
 		case "mem":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.Memory,
-			}
+			fields[fKey] = containerMetrics.Memory
 		case "memLimit":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.MemoryLimit,
-			}
+			fields[fKey] = containerMetrics.MemoryLimit
 		case "networkTX":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.NetworkTx,
-			}
+			fields[fKey] = containerMetrics.NetworkTx
 		case "networkRX":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.NetworkRx,
-			}
+			fields[fKey] = containerMetrics.NetworkRx
 		case "blockRead":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.BlockRead,
-			}
+			fields[fKey] = containerMetrics.BlockRead
 		case "blockWrite":
-			fields = map[string]interface{}{
-				measurement: containerMetrics.BlockWrite,
-			}
+			fields[fKey] = containerMetrics.BlockWrite
 		}
 		go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 	}
@@ -414,6 +401,13 @@ func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host
 			fields["totalMem"] = Round(float64(info.MemTotal)/(1024*1024*1024), 2)
 			fields["kernelVersion"] = info.KernelVersion
 			fields["os"] = info.OperatingSystem + info.Architecture
+			if hoststackTmp, ok := AllHostList.Load(host); ok {
+				if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
+					if hoststack.hostName == host {
+						fields["ContainerMemUsed"] = hoststack.getAllLastMemory()
+					}
+				}
+			}
 			go common.Write(measurement, tags, fields, time.Now())
 			time.Sleep(defaultCollectDuration)
 		}
