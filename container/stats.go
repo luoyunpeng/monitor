@@ -141,7 +141,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	getContainerList()
 	waitFirst.Wait()
 	logger.Println("host-" + ip + " collect for all running container successfull")
-	go WriteDockerHostInfoToInfluxdb(ctx, dockerCli, ip, logger)
+	go WriteDockerHostInfoToInfluxDB(ctx, dockerCli, ip, logger)
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
@@ -347,7 +347,7 @@ func GetHostContainerInfo(host string) []string {
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
 	fields := make(map[string]interface{})
 	fileKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
-	measurement := "hostContainerMetric"
+	measurement := "containerMetric"
 	tags := map[string]string{
 		"host": host,
 		"name": containerName,
@@ -374,7 +374,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 	}
 }
 
-func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host string, logger *log.Logger) {
+func WriteDockerHostInfoToInfluxDB(ctx context.Context, cli *client.Client, host string, logger *log.Logger) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
@@ -404,7 +404,7 @@ func WriteDockerHostInfoToInfluxdb(ctx context.Context, cli *client.Client, host
 			if hoststackTmp, ok := AllHostList.Load(host); ok {
 				if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 					if hoststack.hostName == host {
-						fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()/float64(info.MemTotal/(1024*1024)), 2)
+						fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
 					}
 				}
 			}
