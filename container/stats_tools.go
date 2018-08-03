@@ -77,12 +77,24 @@ func (s *HostContainerMetricStack) allNames() []string {
 	return names
 }
 
+func (s *HostContainerMetricStack) getAllLastMemory() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var totalMem float64
+	for _, cm := range s.cms {
+		totalMem += cm.ReadAbleMetrics[cm.length()-1].Memory
+	}
+
+	return totalMem
+}
+
 type containerMetricStack struct {
 	mu sync.RWMutex
 
-	ID            string
-	ContainerName string
-	csFMetrics    []*ParsedConatinerMetrics
+	ID              string
+	ContainerName   string
+	ReadAbleMetrics []*ParsedConatinerMetrics
 
 	isInvalid bool
 }
@@ -95,13 +107,13 @@ func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
 	defer cms.mu.Unlock()
 
-	if len(cms.csFMetrics) == defaultReadLength {
+	if len(cms.ReadAbleMetrics) == defaultReadLength {
 		//cms.csFMetrics = append(cms.csFMetrics, cfm)
 		//delete the first one also the oldest one, and append the latest one
-		cms.csFMetrics = append(cms.csFMetrics[1:], cfm)
+		cms.ReadAbleMetrics = append(cms.ReadAbleMetrics[1:], cfm)
 		return true
 	}
-	cms.csFMetrics = append(cms.csFMetrics, cfm)
+	cms.ReadAbleMetrics = append(cms.ReadAbleMetrics, cfm)
 	return true
 }
 
@@ -109,20 +121,20 @@ func (cms *containerMetricStack) read(num int) []*ParsedConatinerMetrics {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
-	if len(cms.csFMetrics) == 0 {
+	if len(cms.ReadAbleMetrics) == 0 {
 		return nil
 	}
-	if len(cms.csFMetrics) >= num {
-		return cms.csFMetrics[:num]
+	if len(cms.ReadAbleMetrics) >= num {
+		return cms.ReadAbleMetrics[:num]
 	}
-	return cms.csFMetrics[:len(cms.csFMetrics)]
+	return cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
 }
 
 func (cms *containerMetricStack) length() int {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
-	return len(cms.csFMetrics)
+	return len(cms.ReadAbleMetrics)
 }
 
 // NewContainerStats returns a new ContainerStats entity and sets in it the given name
@@ -142,7 +154,7 @@ type ParsedConatinerMetrics struct {
 	PidsCurrent      uint64
 
 	//time
-	ReadTime    string
+	ReadTime            string
 	ReadTimeForInfluxDB time.Time
 }
 
@@ -187,7 +199,7 @@ func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 	s.BlockWrite = float64(blkWrite)
 	s.PidsCurrent = pidsStatsCurrent
 	s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-	s.ReadTimeForInfluxDB =  statsJSON.Read.Add(time.Hour * 8)
+	s.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
 	return s, nil
 }
 
