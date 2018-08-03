@@ -345,9 +345,8 @@ func GetHostContainerInfo(host string) []string {
 }
 
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
-	fields := make(map[string]interface{})
+	var fields map[string]interface{}
 	fileKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
-	measurement := "containerMetric"
 	tags := map[string]string{
 		"host": host,
 		"name": containerName,
@@ -356,21 +355,35 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 	for _, fKey := range fileKeys {
 		switch fKey {
 		case "cpu":
-			fields[fKey] = containerMetrics.CPUPercentage
+			fields = map[string]interface{}{
+				fKey: containerMetrics.CPUPercentage,
+			}
 		case "mem":
-			fields[fKey] = containerMetrics.Memory
+			fields = map[string]interface{}{
+				fKey: containerMetrics.Memory,
+			}
 		case "memLimit":
-			fields[fKey] = containerMetrics.MemoryLimit
+			fields = map[string]interface{}{
+				fKey: containerMetrics.MemoryLimit,
+			}
 		case "networkTX":
-			fields[fKey] = containerMetrics.NetworkTx
+			fields = map[string]interface{}{
+				fKey: containerMetrics.NetworkTx,
+			}
 		case "networkRX":
-			fields[fKey] = containerMetrics.NetworkRx
+			fields = map[string]interface{}{
+				fKey: containerMetrics.NetworkRx,
+			}
 		case "blockRead":
-			fields[fKey] = containerMetrics.BlockRead
+			fields = map[string]interface{}{
+				fKey: containerMetrics.BlockRead,
+			}
 		case "blockWrite":
-			fields[fKey] = containerMetrics.BlockWrite
+			fields = map[string]interface{}{
+				fKey: containerMetrics.BlockWrite,
+			}
 		}
-		go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+		go common.Write(fKey, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 	}
 }
 
