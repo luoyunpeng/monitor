@@ -83,7 +83,7 @@ func (s *HostContainerMetricStack) getAllLastMemory() float64 {
 
 	var totalMem float64
 	for _, cm := range s.cms {
-		totalMem += cm.ReadAbleMetrics[cm.length()-1].Memory
+		totalMem += cm.getLatestMemory()
 	}
 
 	return totalMem
@@ -128,6 +128,13 @@ func (cms *containerMetricStack) read(num int) []*ParsedConatinerMetrics {
 		return cms.ReadAbleMetrics[:num]
 	}
 	return cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
+}
+
+func (cms *containerMetricStack) getLatestMemory() float64 {
+	cms.mu.RLock()
+	defer cms.mu.RUnlock()
+
+	return cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
 }
 
 func (cms *containerMetricStack) length() int {
