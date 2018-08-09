@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -24,6 +25,7 @@ import (
 
 var (
 	hostIPs = []string{"localhost"}
+	port string
 )
 
 func init() {
@@ -35,6 +37,8 @@ func init() {
 		runtime.GOMAXPROCS(numProces)
 		fmt.Println("[ monitor ] set max processor to ", numProces)
 	}
+	flag.StringVar(&port,"port",":8080","base image use to create container")
+	flag.Parse()
 }
 
 func main() {
@@ -52,6 +56,7 @@ func main() {
 	v1.GET("/container/logs/:id", ContainerLogs)
 	v1.GET("/host/mem", HostMemInfo)
 
+	v1.POST("/dockerd/add",)
 	//for profiling
 	v1.GET("/debug/pprof/", func(ctx *gin.Context) {
 		pprof.Index(ctx.Writer, ctx.Request)
@@ -78,8 +83,9 @@ func main() {
 		go container.KeepStats(cli, ip)
 		container.DockerCliList.Store(ip, cli)
 	}
-
-	router.Run()
+	go container.WriteAllHostInfo()
+	//default run at :8080
+	router.Run(port)
 }
 
 func ContainerStats(ctx *gin.Context) {

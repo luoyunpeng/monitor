@@ -26,7 +26,7 @@ var (
 const (
 	defaultReadLength      = 15
 	defaultCollectDuration = 15 * time.Second
-	defaultCollectTimeOut  = defaultCollectDuration + time.Second*10
+	defaultCollectTimeOut  = defaultCollectDuration + 10*time.Second
 	defaultMaxTimeoutTimes = 5
 )
 
@@ -345,46 +345,34 @@ func GetHostContainerInfo(host string) []string {
 }
 
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
-	var fields map[string]interface{}
-	fileKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
+	fields := make(map[string]interface{})
+	measurement := "container"
+	fieldKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
 	tags := map[string]string{
 		"host": host,
 		"name": containerName,
 	}
 
-	for _, fKey := range fileKeys {
+	for _, fKey := range fieldKeys {
 		switch fKey {
 		case "cpu":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.CPUPercentage,
-			}
+			fields[fKey] = containerMetrics.CPUPercentage
 		case "mem":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.Memory,
-			}
+			fields[fKey] = containerMetrics.Memory
 		case "memLimit":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.MemoryLimit,
-			}
+			fields[fKey] = containerMetrics.MemoryLimit
 		case "networkTX":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.NetworkTx,
-			}
+			fields[fKey] = containerMetrics.NetworkTx
 		case "networkRX":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.NetworkRx,
-			}
+			fields[fKey] = containerMetrics.NetworkRx
 		case "blockRead":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.BlockRead,
-			}
+			fields[fKey] = containerMetrics.BlockRead
 		case "blockWrite":
-			fields = map[string]interface{}{
-				fKey: containerMetrics.BlockWrite,
-			}
+			fields[fKey] = containerMetrics.BlockWrite
 		}
-		go common.Write(fKey, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 	}
+
+	go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
 func WriteDockerHostInfoToInfluxDB(ctx context.Context, cli *client.Client, host string, logger *log.Logger) {
@@ -397,7 +385,7 @@ func WriteDockerHostInfoToInfluxDB(ctx context.Context, cli *client.Client, host
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Println("cancel for writing docker host- " + host + " to influxdb")
+			logger.Println("cancel for writing docker host- " + host + " info to influxdb")
 			return
 		default:
 			info, err := cli.Info(ctx)
@@ -424,5 +412,43 @@ func WriteDockerHostInfoToInfluxDB(ctx context.Context, cli *client.Client, host
 			go common.Write(measurement, tags, fields, time.Now())
 			time.Sleep(defaultCollectDuration)
 		}
+	}
+}
+
+func WriteAllHostInfo() {
+	time.Sleep(defaultCollectDuration * 2)
+	measurement := "allHost"
+	fields := make(map[string]interface{})
+	tags := map[string]string{
+		"host": "All",
+	}
+
+	for {
+		hostNum := 0
+		stopped := 0
+		running := 0
+		DockerCliList.Range(func(key, cliTmp interface{}) bool {
+			hostNum++
+			if cli, ok := cliTmp.(*client.Client); ok {
+				_, err := cli.Ping(context.Background())
+				if err != nil {
+					k, _ := key.(string)
+					println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
+					stopped++
+				} else {
+					running++
+				}
+			}
+			return true
+		})
+		fields["hostNum"] = hostNum
+		fields["dockerdRunning"] = running
+		fields["dockerdDead"] = stopped
+		go common.Write(measurement, tags, fields, time.Now())
+		if running == 0 {
+			println("no more docker daemono is running, return store all host info to influxdb")
+			return
+		}
+		time.Sleep(defaultCollectDuration)
 	}
 }
