@@ -420,7 +420,7 @@ func WriteAllHostInfo() {
 	measurement := "allHost"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
-		"host": "All",
+		"ALL": "all",
 	}
 
 	for {
