@@ -37,17 +37,17 @@ func Write(measurement string, tags map[string]string, files map[string]interfac
 		Precision: "s",
 	})
 	if err != nil {
-		log.Fatal(err)
+		println("err happen when new  batch points: ", err)
 	}
 
 	pt, err := client.NewPoint(measurement, tags, files, readTime)
 	if err != nil {
-		log.Fatal(err)
+		println("err happen when new point: ", err)
 	}
 	bp.AddPoint(pt)
 
 	// Write the batch
 	if err := InfluCli.Write(bp); err != nil {
-		log.Fatal(err)
+		println("err happen when write the batch point: ", err)
 	}
 }

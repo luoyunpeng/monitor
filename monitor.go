@@ -24,12 +24,11 @@ import (
 )
 
 var (
-	hostIPs = []string{"localhost"}
 	port    string
 )
 
 func init() {
-	if len(hostIPs) == 0 {
+	if len(common.HostIPs) == 0 {
 		panic("at least one host must given")
 	}
 	if runtime.NumCPU() >= 4 {
@@ -74,7 +73,7 @@ func main() {
 		pprof.Trace(ctx.Writer, ctx.Request)
 	})
 
-	for _, ip := range hostIPs {
+	for _, ip := range common.HostIPs {
 		cli, err := common.InitClient(ip)
 		if err != nil {
 			log.Println("connect to ", ip, " err :", err)
@@ -419,7 +418,7 @@ func checkParam(id, hostName string) error {
 	}
 
 	isHostKnown := false
-	for _, h := range hostIPs {
+	for _, h := range common.HostIPs {
 		if hostName == h {
 			isHostKnown = true
 		}

@@ -424,11 +424,9 @@ func WriteAllHostInfo() {
 	}
 
 	for {
-		hostNum := 0
 		stopped := 0
 		running := 0
 		DockerCliList.Range(func(key, cliTmp interface{}) bool {
-			hostNum++
 			if cli, ok := cliTmp.(*client.Client); ok {
 				_, err := cli.Ping(context.Background())
 				if err != nil {
@@ -441,9 +439,9 @@ func WriteAllHostInfo() {
 			}
 			return true
 		})
-		fields["hostNum"] = hostNum
+		fields["hostNum"] = len(common.HostIPs)
 		fields["dockerdRunning"] = running
-		fields["dockerdDead"] = stopped
+		fields["dockerdDead"] = len(common.HostIPs) - running
 		go common.Write(measurement, tags, fields, time.Now())
 		if running == 0 {
 			println("no more docker daemono is running, return store all host info to influxdb")
