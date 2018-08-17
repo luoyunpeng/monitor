@@ -275,7 +275,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		case <-time.After(defaultCollectTimeOut):
 			// zero out the values if we have not received an update within
 			// the specified duration.
-			if timeoutTimes > defaultMaxTimeoutTimes {
+			if timeoutTimes == defaultMaxTimeoutTimes {
 				_, err := cli.Ping(ctx)
 				if err != nil {
 					logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
@@ -424,15 +424,13 @@ func WriteAllHostInfo() {
 	}
 
 	for {
-		stopped := 0
 		running := 0
 		DockerCliList.Range(func(key, cliTmp interface{}) bool {
 			if cli, ok := cliTmp.(*client.Client); ok {
 				_, err := cli.Ping(context.Background())
 				if err != nil {
 					k, _ := key.(string)
-					println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
-					stopped++
+					log.Println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
 				} else {
 					running++
 				}
@@ -444,7 +442,7 @@ func WriteAllHostInfo() {
 		fields["dockerdDead"] = len(common.HostIPs) - running
 		go common.Write(measurement, tags, fields, time.Now())
 		if running == 0 {
-			println("no more docker daemono is running, return store all host info to influxdb")
+			log.Println("no more docker daemono is running, return store all host info to influxdb")
 			return
 		}
 		time.Sleep(defaultCollectDuration)
