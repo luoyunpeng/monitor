@@ -3,7 +3,6 @@ package container
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -431,7 +430,7 @@ func WriteAllHostInfo() {
 				_, err := cli.Ping(context.Background())
 				if err != nil {
 					k, _ := key.(string)
-					fmt.Println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
+					log.Println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
 				} else {
 					running++
 				}
@@ -443,7 +442,7 @@ func WriteAllHostInfo() {
 		fields["dockerdDead"] = len(common.HostIPs) - running
 		go common.Write(measurement, tags, fields, time.Now())
 		if running == 0 {
-			fmt.Println("no more docker daemono is running, return store all host info to influxdb")
+			log.Println("no more docker daemono is running, return store all host info to influxdb")
 			return
 		}
 		time.Sleep(defaultCollectDuration)
