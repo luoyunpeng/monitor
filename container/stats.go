@@ -140,8 +140,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
-	logger.Println("host-" + ip + " collect for all running container successfull")
-	go WriteDockerHostInfoToInfluxDB(ctx, dockerCli, ip, logger)
+	logger.Println("host-" + ip + " first collect for all running container successfull")
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
@@ -375,76 +374,77 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 	go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
-func WriteDockerHostInfoToInfluxDB(ctx context.Context, cli *client.Client, host string, logger *log.Logger) {
+func WriteDockerHostInfoToInfluxDB(host string, info *types.Info) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
 		"host": host,
 	}
-	//TODO, created, restarting, running, removing, paused, exited and dead ,for show docker container status on grafana
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Println("cancel for writing docker host- " + host + " info to influxdb")
-			return
-		default:
-			info, err := cli.Info(ctx)
-			if err != nil {
-				logger.Printf("get docker host info error occured: %v", err)
-				return
+
+	fields["hostName"] = info.Name
+	fields["imagesLen"] = info.Images
+	fields["containerTotal"] = info.Containers
+	fields["containerRunning"] = info.ContainersRunning
+	fields["containersStopped"] = info.ContainersStopped
+	fields["ncpu"] = info.NCPU
+	fields["totalMem"] = Round(float64(info.MemTotal)/(1024*1024*1024), 2)
+	fields["kernelVersion"] = info.KernelVersion
+	fields["os"] = info.OperatingSystem + info.Architecture
+	if hoststackTmp, ok := AllHostList.Load(host); ok {
+		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
+			if hoststack.hostName == host {
+				fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
 			}
-			fields["hostName"] = info.Name
-			fields["imagesLen"] = info.Images
-			fields["containerTotal"] = info.Containers
-			fields["containerRunning"] = info.ContainersRunning
-			fields["containersStopped"] = info.ContainersStopped
-			fields["ncpu"] = info.NCPU
-			fields["totalMem"] = Round(float64(info.MemTotal)/(1024*1024*1024), 2)
-			fields["kernelVersion"] = info.KernelVersion
-			fields["os"] = info.OperatingSystem + info.Architecture
-			if hoststackTmp, ok := AllHostList.Load(host); ok {
-				if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
-					if hoststack.hostName == host {
-						fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
-					}
-				}
-			}
-			go common.Write(measurement, tags, fields, time.Now())
-			time.Sleep(defaultCollectDuration)
 		}
 	}
+
+	go common.Write(measurement, tags, fields, time.Now())
 }
 
 func WriteAllHostInfo() {
-	time.Sleep(defaultCollectDuration * 2)
+	time.Sleep(defaultCollectDuration)
 	measurement := "allHost"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
 		"ALL": "all",
 	}
+	ctx := context.Background()
+	logger := initLog("all-host")
 
 	for {
-		running := 0
+		runningDockerHost := 0
+		totalContainer := 0
+		totalRunningContainer := 0
 		DockerCliList.Range(func(key, cliTmp interface{}) bool {
 			if cli, ok := cliTmp.(*client.Client); ok {
-				_, err := cli.Ping(context.Background())
+				_, err := cli.Ping(ctx)
+				ip, _ := key.(string)
 				if err != nil {
-					k, _ := key.(string)
-					log.Println(" ping host-"+k+" err:", err, " when store all host info to influxdb")
+					logger.Println(" ping host-"+ip+" err:", err, " when store all host info to influxdb")
 				} else {
-					running++
+					runningDockerHost++
+					info, err := cli.Info(ctx)
+					if err != nil {
+						logger.Printf("get docker host"+ip+" info error occured: %v", err)
+					}
+					totalContainer += info.Containers
+					totalRunningContainer += info.ContainersRunning
+					go WriteDockerHostInfoToInfluxDB(ip, &info)
 				}
 			}
 			return true
 		})
-		fields["hostNum"] = len(common.HostIPs)
-		fields["dockerdRunning"] = running
-		fields["dockerdDead"] = len(common.HostIPs) - running
-		go common.Write(measurement, tags, fields, time.Now())
-		if running == 0 {
-			log.Println("no more docker daemono is running, return store all host info to influxdb")
+		if runningDockerHost == 0 {
+			logger.Println("no more docker daemono is running, return store all host info to influxdb")
 			return
 		}
-		time.Sleep(defaultCollectDuration)
+		fields["hostNum"] = len(common.HostIPs)
+		fields["dockerdRunning"] = runningDockerHost
+		fields["dockerdDead"] = len(common.HostIPs) - runningDockerHost
+		fields["totalContainer"] = totalContainer
+		fields["totalRunning"] = totalRunningContainer
+		fields["totalStopped"] = totalContainer - totalRunningContainer
+		go common.Write(measurement, tags, fields, time.Now())
+		time.Sleep(defaultCollectDuration + 30*time.Second)
 	}
 }
