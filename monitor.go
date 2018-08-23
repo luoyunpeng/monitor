@@ -1,30 +1,23 @@
 package main
 
 import (
-	"bufio"
-	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"net/http/pprof"
 	"runtime"
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
-	"github.com/luoyunpeng/monitor/host"
+	"github.com/luoyunpeng/monitor/handler"
 )
 
 var (
-	port    string
+	port string
 )
 
 func init() {
@@ -34,7 +27,7 @@ func init() {
 	if runtime.NumCPU() >= 4 {
 		numProces := runtime.NumCPU() / 2
 		runtime.GOMAXPROCS(numProces)
-		fmt.Println("[ monitor ] set max processor to ", numProces)
+		println("[ monitor ] set max processor to ", numProces)
 	}
 	flag.StringVar(&port, "port", ":8080", "base image use to create container")
 	flag.Parse()
@@ -42,18 +35,19 @@ func init() {
 
 func main() {
 	router := gin.Default()
+	router.Use(cors)
 	v1 := router.Group("")
 
-	v1.GET("/container/stats/:id", ContainerStats)
-	v1.GET("/container/metric/mem/:id", ContainerMem)
-	v1.GET("/container/metric/mempercent/:id", ContainerMemPercent)
-	v1.GET("/container/metric/memlimit/:id", ContainerMemLimit)
-	v1.GET("/container/metric/cpu/:id", ContainerCPU)
-	v1.GET("/container/metric/networkio/:id", ContainerNetworkIO)
-	v1.GET("/container/metric/blockio/:id", ContainerBlockIO)
-	v1.GET("/container/info", ContainerInfo)
-	v1.GET("/container/logs/:id", ContainerLogs)
-	v1.GET("/host/mem", HostMemInfo)
+	v1.GET("/container/stats/:id", handler.ContainerStats)
+	v1.GET("/container/metric/mem/:id", handler.ContainerMem)
+	v1.GET("/container/metric/mempercent/:id", handler.ContainerMemPercent)
+	v1.GET("/container/metric/memlimit/:id", handler.ContainerMemLimit)
+	v1.GET("/container/metric/cpu/:id", handler.ContainerCPU)
+	v1.GET("/container/metric/networkio/:id", handler.ContainerNetworkIO)
+	v1.GET("/container/metric/blockio/:id", handler.ContainerBlockIO)
+	v1.GET("/container/info", handler.ContainerInfo)
+	v1.GET("/container/logs/:id", handler.ContainerLogs)
+	v1.GET("/host/mem", handler.HostMemInfo)
 
 	v1.POST("/dockerd/add")
 	//for profiling
@@ -93,339 +87,37 @@ func main() {
 	router.Run(port)
 }
 
-func ContainerStats(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
+func cors(c *gin.Context) {
+	method := c.Request.Method               //请求方法
+	origin := c.Request.Header.Get("Origin") //请求头部
+	var headerKeys []string                  // 声明请求头keys
+	for k := range c.Request.Header {
+		headerKeys = append(headerKeys, k)
 	}
-
-	hstats, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-	ctx.JSONP(http.StatusOK, hstats)
-}
-
-func ContainerMem(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cMem []struct {
-		Mem      float64
-		ReadTime string
-	}
-
-	for _, cm := range csm {
-		cMem = append(cMem, struct {
-			Mem      float64
-			ReadTime string
-		}{Mem: cm.Memory, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
-	}
-
-	ctx.JSONP(http.StatusOK, cMem)
-}
-
-func ContainerMemPercent(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cMemPercent struct {
-		UsedPercentage  float64
-		UnUsePercentage float64
-		ReadTime        string
-	}
-
-	if len(csm) >= 1 {
-		cMemPercent.UsedPercentage = csm[len(csm)-1].MemoryPercentage
-		cMemPercent.UnUsePercentage = container.Round(100-cMemPercent.UsedPercentage, 3)
-		cMemPercent.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
-	}
-
-	ctx.JSONP(http.StatusOK, cMemPercent)
-}
-
-func ContainerMemLimit(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cMemLimit struct {
-		MemoryLimit float64
-		ReadTime    string
-	}
-
-	if len(csm) >= 1 {
-		cMemLimit.MemoryLimit = csm[len(csm)-1].MemoryLimit
-		cMemLimit.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
-	}
-
-	ctx.JSONP(http.StatusOK, cMemLimit)
-}
-
-func ContainerCPU(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cCPU []struct {
-		CPU      float64
-		ReadTime string
-	}
-
-	for _, cm := range csm {
-		cCPU = append(cCPU, struct {
-			CPU      float64
-			ReadTime string
-		}{CPU: cm.CPUPercentage, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
-	}
-
-	ctx.JSONP(http.StatusOK, cCPU)
-}
-
-func ContainerNetworkIO(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cNetworkIO []struct {
-		NetworkTX float64
-		NetworkRX float64
-		ReadTime  string
-	}
-
-	for _, cm := range csm {
-		cNetworkIO = append(cNetworkIO, struct {
-			NetworkTX float64
-			NetworkRX float64
-			ReadTime  string
-		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
-	}
-
-	ctx.JSONP(http.StatusOK, cNetworkIO)
-}
-
-func ContainerBlockIO(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	csm, err := container.GetContainerMetrics(hostName, id)
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-
-	var cBlockIO []struct {
-		BlockRead  float64
-		BlockWrite float64
-		ReadTime   string
-	}
-
-	for _, cm := range csm {
-		cBlockIO = append(cBlockIO, struct {
-			BlockRead  float64
-			BlockWrite float64
-			ReadTime   string
-		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
-	}
-
-	ctx.JSONP(http.StatusOK, cBlockIO)
-}
-
-func ContainerInfo(ctx *gin.Context) {
-	cinfo := struct {
-		Len   int
-		Names []string
-	}{}
-	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam("must", hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
-		return
-	}
-	cinfo.Names = container.GetHostContainerInfo(hostName)
-	if cinfo.Names == nil {
-		ctx.JSONP(http.StatusNotFound, "stack got no container metrics")
-		return
-	}
-	cinfo.Len = len(cinfo.Names)
-	ctx.JSONP(http.StatusOK, cinfo)
-}
-
-var upGrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
-func ContainerLogs(ctx *gin.Context) {
-	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
-	size := ctx.DefaultQuery("size", "500")
-	_, err := strconv.Atoi(size)
-	if size != "all" && err != nil {
-		size = "500"
-	}
-
-	logOptions := types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Timestamps: true,
-		Follow:     true,
-		Details:    true,
-		Tail:       size,
-	}
-
-	//upgrade http-Get to WebSocket
-	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
-	if err != nil {
-		return
-	}
-	defer ws.Close()
-
-	if err := checkParam(id, hostName); err != nil {
-		err = ws.WriteMessage(1, []byte(err.Error()))
-		if err != nil {
-			fmt.Printf("err occured when write container log to websocket client: %v", err)
-		}
-		return
-	}
-
-	if cliTmp, isLoaded := container.DockerCliList.Load(hostName); isLoaded {
-		if cli, ok := cliTmp.(*client.Client); ok {
-			logBody, err := cli.ContainerLogs(context.Background(), id, logOptions)
-			if err != nil {
-				err = ws.WriteMessage(1, []byte(err.Error()))
-				return
-			}
-			defer logBody.Close()
-
-			//read message from ws(websocket)
-			go func() {
-				for {
-					if _, _, err := ws.NextReader(); err != nil {
-						break
-					}
-				}
-			}()
-
-			//write container log
-			br := bufio.NewReader(logBody)
-			for {
-				lineBytes, err := br.ReadBytes('\n')
-				if err != nil {
-					break
-				}
-				//
-				err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
-				if err != nil {
-					fmt.Printf("err occured when write container log to websocket client: %v", err)
-					return
-				}
-			}
-		}
+	headerStr := strings.Join(headerKeys, ", ")
+	if headerStr != "" {
+		headerStr = fmt.Sprintf("access-control-allow-origin, access-control-allow-headers, %s", headerStr)
 	} else {
-		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the host"))
-		if errLoad != nil {
-			fmt.Printf("err occured when write container log to websocket client: %v", errLoad)
-		}
-		return
+		headerStr = "access-control-allow-origin, access-control-allow-headers"
 	}
-}
-
-func HostMemInfo(ctx *gin.Context) {
-	vMem, err := host.VirtualMemory()
-	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err)
-		return
-	}
-
-	hostMemInfo := struct {
-		Available      uint64
-		Total          uint64
-		Used           uint64
-		Free           uint64
-		BufferAndCache uint64
-		UserPercent    float64
-	}{
-		Total:       vMem.Total / 1024,
-		Used:        vMem.Used / 1024,
-		Free:        vMem.Free / 1024,
-		Available:   vMem.Available / 1024,
-		UserPercent: math.Trunc(vMem.UsedPercent*1e2+0.5) * 1e-2,
-	}
-	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
-	ctx.JSONP(http.StatusOK, hostMemInfo)
-}
-
-func checkParam(id, hostName string) error {
-	if len(id) == 0 || len(hostName) == 0 {
-		return errors.New("container id/name or host must given")
+	if origin != "" {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Origin", "*")                                       // 这是允许访问所有域
+		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE") //服务器支持的所有跨域请求的方法,为了避免浏览次请求的多次'预检'请求
+		//  header的类型
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Length, X-CSRF-Token, Token,session,X_Requested_With,Accept, Origin, Host, Connection, Accept-Encoding, Accept-Language,DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Pragma")
+		//              允许跨域设置                                                                                                      可以返回其他子段
+		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers,Cache-Control,Content-Language,Content-Type,Expires,Last-Modified,Pragma,FooBar") // 跨域关键设置 让浏览器可以解析
+		c.Header("Access-Control-Max-Age", "172800")                                                                                                                                                           // 缓存请求信息 单位为秒
+		c.Header("Access-Control-Allow-Credentials", "false")                                                                                                                                                  //  跨域请求是否需要带cookie信息 默认设置为true
+		c.Set("content-type", "application/json")                                                                                                                                                              // 设置返回格式是json
 	}
 
-	isHostKnown := false
-	for _, h := range common.HostIPs {
-		if hostName == h {
-			isHostKnown = true
-		}
+	//放行所有OPTIONS方法
+	if method == "OPTIONS" {
+		c.JSON(http.StatusOK, "Options Request!")
 	}
+	// 处理请求
+	c.Next() //  处理请求
 
-	if !isHostKnown {
-		return errors.New("nknown host, please try again")
-	}
-	return nil
 }
