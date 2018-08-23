@@ -50,7 +50,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			close(c)
 			if dockerCli != nil {
 				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList and host list ")
-				dockerCli.Close()
+				err := dockerCli.Close()
+				if err != nil {
+					logger.Println("close dockerCli for host:"+ip+" err happen: %v", err)
+				}
 				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
 			}
@@ -185,7 +188,10 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				// bool value initial value is false
 				if cms.isInvalid {
 					if response.Body != nil {
-						response.Body.Close()
+						errBodyClose := response.Body.Close()
+						if errBodyClose != nil {
+							logger.Println("close container stats api response body  for host:"+host+" err happen: %v", err)
+						}
 					}
 					//container stop or rm event happened or others(event that lead to stop the container), return collecting goroutine
 					u <- errNoSuchC
@@ -260,7 +266,10 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				cfm.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
 				cms.put(cfm)
 				u <- nil
-				response.Body.Close()
+				errBodyClose := response.Body.Close()
+				if errBodyClose != nil {
+					logger.Println("close container stats api response body  for host:"+host+" err happen: %v", err)
+				}
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 				go WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)

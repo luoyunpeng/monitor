@@ -11,6 +11,7 @@ var (
 	defaultVersion = "1.37"
 )
 
+//InitClient init a docker client from give ip, default port is 2375
 func InitClient(ip string) (*client.Client, error) {
 	var (
 		err error
