@@ -19,7 +19,12 @@ import (
 )
 
 var (
-	AllHostList   sync.Map
+	// Each container can store at most 15 stats record in individual container stack
+	// Each Host has many container stack, we use hostStack to store the container stacks
+	// AllHostList stores every host's hostStack, the key is host ip address
+	AllHostList sync.Map
+	// Each host use dockerCli to get stats from docker daemon
+	// the dockerCli is stored by DockerCliList
 	DockerCliList sync.Map
 )
 
@@ -39,7 +44,7 @@ func initLog(ip string) *log.Logger {
 	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
-//each host will run this method only once
+// Each host will run this method only once
 func KeepStats(dockerCli *client.Client, ip string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	logger := initLog(ip)
@@ -143,7 +148,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
-	logger.Println("host-" + ip + " first collect for all running container successfull")
+	logger.Println("host-" + ip + " container first collecting Done")
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
@@ -326,6 +331,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	}
 }
 
+// Handler will use this for get metric or stats
 func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
@@ -337,9 +343,11 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 			return nil, errors.New("given container name or id is unknown, or container is not running")
 		}
 	}
+
 	return nil, errors.New("given host " + host + " is not loaded")
 }
 
+// Host's container info
 func GetHostContainerInfo(host string) []string {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
@@ -352,6 +360,7 @@ func GetHostContainerInfo(host string) []string {
 	return nil
 }
 
+// Write docker container metric to influxDB
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
 	fields := make(map[string]interface{})
 	measurement := "container"
@@ -383,6 +392,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 	go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
+// Write Docker host info to influxDB
 func WriteDockerHostInfoToInfluxDB(host string, info *types.Info) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
@@ -410,8 +420,8 @@ func WriteDockerHostInfoToInfluxDB(host string, info *types.Info) {
 	go common.Write(measurement, tags, fields, time.Now())
 }
 
+// Calculate all docker host info and write to influxDB
 func WriteAllHostInfo() {
-	time.Sleep(defaultCollectDuration)
 	measurement := "allHost"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
@@ -420,7 +430,7 @@ func WriteAllHostInfo() {
 	ctx := context.Background()
 	logger := initLog("all-host")
 
-	for {
+	for range time.Tick(defaultCollectDuration + 30*time.Second) {
 		runningDockerHost := 0
 		totalContainer := 0
 		totalRunningContainer := 0
@@ -454,6 +464,5 @@ func WriteAllHostInfo() {
 		fields["totalRunning"] = totalRunningContainer
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 		go common.Write(measurement, tags, fields, time.Now())
-		time.Sleep(defaultCollectDuration + 30*time.Second)
 	}
 }
