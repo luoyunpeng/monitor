@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	port *string
+	port string
 )
 
 func init() {
@@ -29,7 +29,7 @@ func init() {
 		runtime.GOMAXPROCS(numProces)
 		println("[ monitor ] set max processor to ", numProces)
 	}
-	flag.StringVar(port, "port", ":8080", "base image use to create container")
+	flag.StringVar(&port, "port", ":8080", "base image use to create container")
 	flag.Parse()
 }
 
@@ -78,13 +78,13 @@ func main() {
 	}
 	go container.WriteAllHostInfo()
 	//default run at :8080
-	_, err := strconv.Atoi(*port)
-	if !strings.HasPrefix(*port, ":") && err == nil {
-		*port = ":" + *port
+	_, err := strconv.Atoi(port)
+	if !strings.HasPrefix(port, ":") && err == nil {
+		port = ":" + port
 	} else {
-		*port = ":8080"
+		port = ":8080"
 	}
-	router.Run(*port)
+	router.Run(port)
 }
 
 func cors(c *gin.Context) {
