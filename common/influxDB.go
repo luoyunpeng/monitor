@@ -10,18 +10,18 @@ import (
 const (
 	hostAddr    = "http://localhost:"
 	defaultPort = "8086"
-	MyDB        = "docker"
+	myDB        = "docker"
 	username    = "monitor"
 	password    = "iscas123"
 )
 
 var (
-	InfluCli client.Client
+	influCli client.Client
 )
 
 func init() {
 	var err error
-	InfluCli, err = client.NewHTTPClient(client.HTTPConfig{
+	influCli, err = client.NewHTTPClient(client.HTTPConfig{
 		Addr:     hostAddr + defaultPort,
 		Username: username,
 		Password: password,
@@ -31,9 +31,10 @@ func init() {
 	}
 }
 
+// Write giving tag kv and files kv to giving measurement
 func Write(measurement string, tags map[string]string, files map[string]interface{}, readTime time.Time) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  MyDB,
+		Database:  myDB,
 		Precision: "s",
 	})
 	if err != nil {
@@ -47,7 +48,7 @@ func Write(measurement string, tags map[string]string, files map[string]interfac
 	bp.AddPoint(pt)
 
 	// Write the batch
-	if err := InfluCli.Write(bp); err != nil {
+	if err := influCli.Write(bp); err != nil {
 		log.Println("err happen when write the batch point: ", err)
 	}
 }
