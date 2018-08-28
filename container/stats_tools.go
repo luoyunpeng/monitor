@@ -23,6 +23,7 @@ type HostContainerMetricStack struct {
 	cms      []*containerMetricStack
 }
 
+// NewHostContainerMetricStack initial a HostContainerMetricStack point type
 func NewHostContainerMetricStack(host string) *HostContainerMetricStack {
 	return &HostContainerMetricStack{hostName: host}
 }
@@ -99,6 +100,7 @@ type containerMetricStack struct {
 	isInvalid bool
 }
 
+// NewContainerMStack initial a NewContainerMStack point type
 func NewContainerMStack(ContainerName, id string) *containerMetricStack {
 	return &containerMetricStack{ContainerName: ContainerName, ID: id}
 }

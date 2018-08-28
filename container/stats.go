@@ -44,7 +44,7 @@ func initLog(ip string) *log.Logger {
 	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
-// Each host will run this method only once
+// KeepStats keeps monitor all container of the given host
 func KeepStats(dockerCli *client.Client, ip string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	logger := initLog(ip)
@@ -331,7 +331,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	}
 }
 
-// Handler will use this for get metric or stats
+// GetContainerMetrics return container stats
 func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
@@ -347,7 +347,7 @@ func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
 	return nil, errors.New("given host " + host + " is not loaded")
 }
 
-// Host's container info
+// GetHostContainerInfo return Host's container info
 func GetHostContainerInfo(host string) []string {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
@@ -360,7 +360,7 @@ func GetHostContainerInfo(host string) []string {
 	return nil
 }
 
-// Write docker container metric to influxDB
+// WriteMetricToInfluxDB write docker container metric to influxDB
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
 	fields := make(map[string]interface{})
 	measurement := "container"
@@ -392,7 +392,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 	go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
-// Write Docker host info to influxDB
+// WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
 func WriteDockerHostInfoToInfluxDB(host string, info *types.Info) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
@@ -430,7 +430,8 @@ func WriteAllHostInfo() {
 	ctx := context.Background()
 	logger := initLog("all-host")
 
-	for range time.Tick(defaultCollectDuration + 30*time.Second) {
+	ticker := time.Tick(defaultCollectDuration + 30*time.Second)
+	for range ticker {
 		runningDockerHost := 0
 		totalContainer := 0
 		totalRunningContainer := 0

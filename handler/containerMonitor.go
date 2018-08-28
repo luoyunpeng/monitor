@@ -19,7 +19,9 @@ import (
 	"github.com/luoyunpeng/monitor/host"
 )
 
-// Container's all readable metric
+// ContainerStats handles GET requests on /container/stats/:id?host=<hostName>
+// if id (container id or name) and host is present, response all metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -36,7 +38,9 @@ func ContainerStats(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, hstats)
 }
 
-// Container's used memory
+// ContainerMem handles GET requests on /container/metric/mem/:id?host=<hostName>
+// if id (container id or name) and host is present, response mem metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerMem(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -66,7 +70,9 @@ func ContainerMem(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cMem)
 }
 
-// Container's memory usage percentage
+// ContainerMemPercent handles GET requests on /container/metric/mempercent/:id?host=<hostName>
+// if id (container id or name) and host is present, response memory usage metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerMemPercent(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -96,7 +102,9 @@ func ContainerMemPercent(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cMemPercent)
 }
 
-// Container's memory limit
+// ContainerMemLimit handles GET requests on /container/metric/memlimit/:id?host=<hostName>
+// if id (container id or name) and host is present, response memory limit metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerMemLimit(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -124,7 +132,9 @@ func ContainerMemLimit(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cMemLimit)
 }
 
-// Container's cpu usage percentage
+// ContainerCPU handles GET requests on /container/metric/cpu/:id?host=<hostName>
+// if id (container id or name) and host is present, response cpu usage metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerCPU(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -154,7 +164,9 @@ func ContainerCPU(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cCPU)
 }
 
-// Container's network TX
+// ContainerNetworkIO handles GET requests on /container/metric/networkio/:id?host=<hostName>
+// if id (container id or name) and host is present, response networkIO metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerNetworkIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -186,7 +198,9 @@ func ContainerNetworkIO(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cNetworkIO)
 }
 
-// Container's block read and write
+// ContainerBlockIO handles GET requests on /container/metric/blockio/:id?host=<hostName>
+// if id (container id or name) and host is present, response blockIO metric for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerBlockIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -218,7 +232,9 @@ func ContainerBlockIO(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cBlockIO)
 }
 
-// Container's basic info
+// ContainerInfo handles GET requests on /container/info?host=<hostName>
+// if id (container id or name) and host is present, response blockIO metric for the host
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerInfo(ctx *gin.Context) {
 	cinfo := struct {
 		Len   int
@@ -246,7 +262,9 @@ var upGrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// Container's real time log
+// ContainerLogs handles GET requests on /container/logs?host=<hostName>&id=<containerID>
+// if id (container id or name) and host is present, response real time container log for the container
+// if id (container id or name) and host is not present, response "no such container error"
 func ContainerLogs(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
@@ -265,7 +283,7 @@ func ContainerLogs(ctx *gin.Context) {
 		Tail:       size,
 	}
 
-	//upgrade http-Get to WebSocket
+	// upgrade http-Get to WebSocket
 	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		return
@@ -289,7 +307,7 @@ func ContainerLogs(ctx *gin.Context) {
 			}
 			defer logBody.Close()
 
-			//read message from ws(websocket)
+			// read message from ws(websocket)
 			go func() {
 				for {
 					if _, _, err := ws.NextReader(); err != nil {
@@ -298,7 +316,7 @@ func ContainerLogs(ctx *gin.Context) {
 				}
 			}()
 
-			//write container log
+			// write container log
 			br := bufio.NewReader(logBody)
 			for {
 				lineBytes, err := br.ReadBytes('\n')
@@ -322,6 +340,7 @@ func ContainerLogs(ctx *gin.Context) {
 	}
 }
 
+// ContainerLogs handles GET requests on "/host/mem" for localhost
 func HostMemInfo(ctx *gin.Context) {
 	vMem, err := host.VirtualMemory()
 	if err != nil {
