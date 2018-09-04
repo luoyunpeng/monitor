@@ -283,9 +283,10 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	}()
 
 	timeoutTimes := 0
+	ticker := time.Tick(defaultCollectTimeOut)
 	for {
 		select {
-		case <-time.After(defaultCollectTimeOut):
+		case <-ticker:
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes == defaultMaxTimeoutTimes {
@@ -393,7 +394,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedC
 }
 
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
-func WriteDockerHostInfoToInfluxDB(host string, info *types.Info) {
+func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
@@ -449,7 +450,7 @@ func WriteAllHostInfo() {
 					}
 					totalContainer += info.Containers
 					totalRunningContainer += info.ContainersRunning
-					go WriteDockerHostInfoToInfluxDB(ip, &info)
+					go WriteDockerHostInfoToInfluxDB(ip, info)
 				}
 			}
 			return true
