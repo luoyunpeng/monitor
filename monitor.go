@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/pprof"
 	_ "net/http/pprof"
 	"runtime"
 	"strconv"
@@ -53,15 +52,7 @@ func main() {
 	//v1.POST("/dockerd/add")
 	//for profiling
 	go func() {
-		r := http.NewServeMux()
-
-		// Register pprof handlers
-		r.HandleFunc("/debug/pprof/", pprof.Index)
-		r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		r.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		r.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		http.ListenAndServe(":8070", r)
+		log.Println(http.ListenAndServe(":8070", nil))
 	}()
 
 	for _, ip := range common.HostIPs {
