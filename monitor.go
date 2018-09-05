@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/pprof"
+	_ "net/http/pprof"
 	"runtime"
 	"strconv"
 	"strings"
@@ -49,23 +49,11 @@ func main() {
 	v1.GET("/container/logs/:id", handler.ContainerLogs)
 	v1.GET("/host/mem", handler.HostMemInfo)
 
-	v1.POST("/dockerd/add")
+	//v1.POST("/dockerd/add")
 	//for profiling
-	v1.GET("/debug/pprof/", func(ctx *gin.Context) {
-		pprof.Index(ctx.Writer, ctx.Request)
-	})
-	v1.GET("/debug/pprof/cmdline", func(ctx *gin.Context) {
-		pprof.Cmdline(ctx.Writer, ctx.Request)
-	})
-	v1.GET("/debug/pprof/profile", func(ctx *gin.Context) {
-		pprof.Profile(ctx.Writer, ctx.Request)
-	})
-	v1.GET("/debug/pprof/symbol", func(ctx *gin.Context) {
-		pprof.Symbol(ctx.Writer, ctx.Request)
-	})
-	v1.GET("/debug/pprof/trace", func(ctx *gin.Context) {
-		pprof.Trace(ctx.Writer, ctx.Request)
-	})
+	go func() {
+		log.Println(http.ListenAndServe(":8070", nil))
+	}()
 
 	for _, ip := range common.HostIPs {
 		cli, err := common.InitClient(ip)

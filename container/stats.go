@@ -41,7 +41,7 @@ func initLog(ip string) *log.Logger {
 		log.Fatalln("Failed to open error log file:", err)
 	}
 
-	return log.New(file, "", log.Ldate|log.Ltime)
+	return log.New(file, ip, log.Ldate|log.Ltime)
 }
 
 // KeepStats keeps monitor all container of the given host
@@ -54,10 +54,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		defer func() {
 			close(c)
 			if dockerCli != nil {
-				logger.Println("close docker-cli-" + ip + ", and remove it from DockerCliList and host list ")
+				logger.Println("close docker-cli and remove it from DockerCliList and host list")
 				err := dockerCli.Close()
 				if err != nil {
-					logger.Println("close dockerCli for host:"+ip+" err happen: %v", err)
+					logger.Printf("close dockerCli for host err happen: %v", err)
 				}
 				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
@@ -82,11 +82,11 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			case event := <-eventq:
 				c <- event
 			case err := <-errq:
-				logger.Printf("host:"+ip+" err happen when listen docker event: %v", err)
+				logger.Printf("host: err happen when listen docker event: %v", err)
 				cancel()
 				return
 			case <-ctx.Done():
-				logger.Printf("connect to docker daemon: " + ip + " time out, stop container event listener")
+				logger.Printf("connect to docker daemon time out, stop container event listener")
 				return
 			}
 		}
@@ -106,7 +106,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			logger.Printf("host:"+ip+" err happen when get all running container: %v", err)
+			logger.Printf("err happen when get all running container: %v", err)
 			return
 		}
 		for _, container := range cs {
@@ -148,13 +148,12 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
-	logger.Println("host-" + ip + " container first collecting Done")
+	logger.Println("container first collecting Done")
 }
 
 func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
 	var (
 		isFirstCollect                = true
-		cfm                           *ParsedConatinerMetrics
 		lastNetworkTX, lastNetworkRX  float64
 		lastBlockRead, lastBlockWrite float64
 
@@ -175,7 +174,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		for {
 			select {
 			case <-ctx.Done():
-				logger.Println("collector for  " + cms.ContainerName + " from docker daemon canceled, return")
+				logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
 				var (
@@ -195,7 +194,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 					if response.Body != nil {
 						errBodyClose := response.Body.Close()
 						if errBodyClose != nil {
-							logger.Println("close container stats api response body  for host:"+host+" err happen: %v", err)
+							logger.Printf("close container stats api response body err happen: %v", err)
 						}
 					}
 					//container stop or rm event happened or others(event that lead to stop the container), return collecting goroutine
@@ -241,7 +240,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				pidsStatsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-				cfm = NewParsedConatinerMetrics()
+				cfm := ParsedConatinerMetrics{}
 				if cms.ContainerName == "" {
 					cms.ContainerName = statsJSON.Name[1:]
 				}
@@ -273,7 +272,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				u <- nil
 				errBodyClose := response.Body.Close()
 				if errBodyClose != nil {
-					logger.Println("close container stats api response body  for host:"+host+" err happen: %v", err)
+					logger.Printf("close container stats api response body err happen: %v", err)
 				}
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 				go WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
@@ -333,7 +332,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 }
 
 // GetContainerMetrics return container stats
-func GetContainerMetrics(host, id string) ([]*ParsedConatinerMetrics, error) {
+func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
@@ -362,7 +361,7 @@ func GetHostContainerInfo(host string) []string {
 }
 
 // WriteMetricToInfluxDB write docker container metric to influxDB
-func WriteMetricToInfluxDB(host, containerName string, containerMetrics *ParsedConatinerMetrics) {
+func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedConatinerMetrics) {
 	fields := make(map[string]interface{})
 	measurement := "container"
 	fieldKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
@@ -441,12 +440,12 @@ func WriteAllHostInfo() {
 				_, err := cli.Ping(ctx)
 				ip, _ := key.(string)
 				if err != nil {
-					logger.Println(" ping host-"+ip+" err:", err, " when store all host info to influxdb")
+					logger.Printf(" when store all host info to influxdb,ping err: %v", err)
 				} else {
 					runningDockerHost++
 					info, err := cli.Info(ctx)
 					if err != nil {
-						logger.Printf("get docker host"+ip+" info error occured: %v", err)
+						logger.Printf("get docker info error occured: %v", err)
 					}
 					totalContainer += info.Containers
 					totalRunningContainer += info.ContainersRunning
