@@ -281,10 +281,9 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 	}()
 
 	timeoutTimes := 0
-	ticker := time.Tick(defaultCollectTimeOut)
 	for {
 		select {
-		case <-ticker:
+		case <-time.After(defaultCollectTimeOut):
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes == defaultMaxTimeoutTimes {
