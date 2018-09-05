@@ -135,6 +135,9 @@ func (cms *containerMetricStack) getLatestMemory() float64 {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
+	if len(cms.ReadAbleMetrics) == 0 {
+		return 0
+	}
 	return cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
 }
 
