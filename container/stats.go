@@ -30,7 +30,7 @@ var (
 
 const (
 	defaultReadLength      = 15
-	defaultCollectDuration = 15 * time.Second
+	defaultCollectDuration = 60 * time.Second
 	defaultCollectTimeOut  = defaultCollectDuration + 10*time.Second
 	defaultMaxTimeoutTimes = 5
 )
@@ -38,16 +38,20 @@ const (
 func initLog(ip string) *log.Logger {
 	file, err := os.OpenFile(ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalln("Failed to open error log file:", err)
+		log.Printf("Failed to open error log file: %v", err)
+		return nil
 	}
 
-	return log.New(file, ip, log.Ldate|log.Ltime)
+	return log.New(file, ip+"-- ** --", log.Ldate|log.Ltime)
 }
 
 // KeepStats keeps monitor all container of the given host
 func KeepStats(dockerCli *client.Client, ip string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	logger := initLog(ip)
+	if logger == nil {
+		return
+	}
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
@@ -266,7 +270,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				}
 				cfm.PidsCurrent = pidsStatsCurrent
 				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-				cfm.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
+				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
 				cms.put(cfm)
 				u <- nil
 				errBodyClose := response.Body.Close()
@@ -274,7 +278,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 					logger.Printf("close container stats api response body err happen: %v", err)
 				}
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-				go WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
+				WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -387,7 +391,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedCo
 		}
 	}
 
-	go createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+	createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
@@ -415,7 +419,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
 		}
 	}
 
-	go createMetricAndWrite(measurement, tags, fields, time.Now())
+	createMetricAndWrite(measurement, tags, fields, time.Now())
 }
 
 // Calculate all docker host info and write to influxDB
@@ -464,7 +468,7 @@ func WriteAllHostInfo() {
 		fields["totalRunning"] = totalRunningContainer
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 
-		go createMetricAndWrite(measurement, tags, fields, time.Now())
+		createMetricAndWrite(measurement, tags, fields, time.Now())
 	}
 }
 
