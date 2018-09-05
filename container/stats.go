@@ -156,10 +156,10 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
 		lastBlockRead, lastBlockWrite float64
-
-		u               = make(chan error, 1)
-		errNoSuchC      = errors.New("no such container")
-		dockerDaemonErr error
+		cfm                           ParsedConatinerMetrics
+		u                             = make(chan error, 1)
+		errNoSuchC                    = errors.New("no such container")
+		dockerDaemonErr               error
 	)
 
 	defer func() {
@@ -240,7 +240,6 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				pidsStatsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-				cfm := ParsedConatinerMetrics{}
 				if cms.ContainerName == "" {
 					cms.ContainerName = statsJSON.Name[1:]
 				}
@@ -389,7 +388,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedCo
 		}
 	}
 
-	go common.Write(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+	go createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
@@ -417,7 +416,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
 		}
 	}
 
-	go common.Write(measurement, tags, fields, time.Now())
+	go createMetricAndWrite(measurement, tags, fields, time.Now())
 }
 
 // Calculate all docker host info and write to influxDB
@@ -431,6 +430,7 @@ func WriteAllHostInfo() {
 	logger := initLog("all-host")
 
 	ticker := time.Tick(defaultCollectDuration + 30*time.Second)
+	go common.Write()
 	for range ticker {
 		runningDockerHost := 0
 		totalContainer := 0
@@ -464,6 +464,16 @@ func WriteAllHostInfo() {
 		fields["totalContainer"] = totalContainer
 		fields["totalRunning"] = totalRunningContainer
 		fields["totalStopped"] = totalContainer - totalRunningContainer
-		go common.Write(measurement, tags, fields, time.Now())
+
+		go createMetricAndWrite(measurement, tags, fields, time.Now())
 	}
+}
+
+func createMetricAndWrite(measurement string, tags map[string]string, fields map[string]interface{}, readTime time.Time) {
+	m := common.Metric{}
+	m.Measurement = measurement
+	m.Tags = tags
+	m.Fields = fields
+	m.ReadTime = readTime
+	common.MetricChan <- m
 }
