@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/json-iterator/go"
-
 	"github.com/docker/docker/api/types"
+	"github.com/json-iterator/go"
 )
 
 var (
@@ -95,7 +94,7 @@ type containerMetricStack struct {
 
 	ID              string
 	ContainerName   string
-	ReadAbleMetrics []*ParsedConatinerMetrics
+	ReadAbleMetrics []ParsedConatinerMetrics
 
 	isInvalid bool
 }
@@ -105,7 +104,7 @@ func NewContainerMStack(ContainerName, id string) *containerMetricStack {
 	return &containerMetricStack{ContainerName: ContainerName, ID: id}
 }
 
-func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
+func (cms *containerMetricStack) put(cfm ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
 	defer cms.mu.Unlock()
 
@@ -119,7 +118,7 @@ func (cms *containerMetricStack) put(cfm *ParsedConatinerMetrics) bool {
 	return true
 }
 
-func (cms *containerMetricStack) read(num int) []*ParsedConatinerMetrics {
+func (cms *containerMetricStack) read(num int) []ParsedConatinerMetrics {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
@@ -146,11 +145,6 @@ func (cms *containerMetricStack) length() int {
 	return len(cms.ReadAbleMetrics)
 }
 
-// NewContainerStats returns a new ContainerStats entity and sets in it the given name
-func NewParsedConatinerMetrics() *ParsedConatinerMetrics {
-	return &ParsedConatinerMetrics{}
-}
-
 type ParsedConatinerMetrics struct {
 	CPUPercentage    float64
 	Memory           float64
@@ -167,6 +161,7 @@ type ParsedConatinerMetrics struct {
 	ReadTimeForInfluxDB time.Time
 }
 
+/*
 func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 	var (
 		previousCPU    uint64
@@ -210,7 +205,7 @@ func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
 	s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
 	s.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
 	return s, nil
-}
+}*/
 
 func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v *types.StatsJSON) float64 {
 	var (
