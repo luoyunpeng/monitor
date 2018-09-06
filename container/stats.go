@@ -42,7 +42,7 @@ func initLog(ip string) *log.Logger {
 		return nil
 	}
 
-	return log.New(file, ip+" **--** ", log.Ldate|log.Ltime)
+	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
 // KeepStats keeps monitor all container of the given host
@@ -271,7 +271,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				cfm.PidsCurrent = pidsStatsCurrent
 				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("15:04:05")
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
-				cms.put(cfm)
+				cms.Put(cfm)
 				u <- nil
 				errBodyClose := response.Body.Close()
 				if errBodyClose != nil {
@@ -339,7 +339,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
 				if containerStack.ID == id || containerStack.ContainerName == id {
-					return containerStack.read(defaultReadLength), nil
+					return containerStack.Read(defaultReadLength), nil
 				}
 			}
 			return nil, errors.New("given container name or id is unknown, or container is not running")
