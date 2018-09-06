@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -64,7 +63,7 @@ func ContainerMem(ctx *gin.Context) {
 		cMem = append(cMem, struct {
 			Mem      float64
 			ReadTime string
-		}{Mem: cm.Memory, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
+		}{Mem: cm.Memory, ReadTime: cm.ReadTime})
 	}
 
 	ctx.JSONP(http.StatusOK, cMem)
@@ -96,7 +95,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 	if len(csm) >= 1 {
 		cMemPercent.UsedPercentage = csm[len(csm)-1].MemoryPercentage
 		cMemPercent.UnUsePercentage = container.Round(100-cMemPercent.UsedPercentage, 3)
-		cMemPercent.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
+		cMemPercent.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
 	ctx.JSONP(http.StatusOK, cMemPercent)
@@ -126,7 +125,7 @@ func ContainerMemLimit(ctx *gin.Context) {
 
 	if len(csm) >= 1 {
 		cMemLimit.MemoryLimit = csm[len(csm)-1].MemoryLimit
-		cMemLimit.ReadTime = strings.Split(csm[len(csm)-1].ReadTime, " ")[1]
+		cMemLimit.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
 	ctx.JSONP(http.StatusOK, cMemLimit)
@@ -158,7 +157,7 @@ func ContainerCPU(ctx *gin.Context) {
 		cCPU = append(cCPU, struct {
 			CPU      float64
 			ReadTime string
-		}{CPU: cm.CPUPercentage, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
+		}{CPU: cm.CPUPercentage, ReadTime: cm.ReadTime})
 	}
 
 	ctx.JSONP(http.StatusOK, cCPU)
@@ -192,7 +191,7 @@ func ContainerNetworkIO(ctx *gin.Context) {
 			NetworkTX float64
 			NetworkRX float64
 			ReadTime  string
-		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
+		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: cm.ReadTime})
 	}
 
 	ctx.JSONP(http.StatusOK, cNetworkIO)
@@ -226,7 +225,7 @@ func ContainerBlockIO(ctx *gin.Context) {
 			BlockRead  float64
 			BlockWrite float64
 			ReadTime   string
-		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: strings.Split(cm.ReadTime, " ")[1]})
+		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: cm.ReadTime})
 	}
 
 	ctx.JSONP(http.StatusOK, cBlockIO)
