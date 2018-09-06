@@ -42,7 +42,7 @@ func initLog(ip string) *log.Logger {
 		return nil
 	}
 
-	return log.New(file, ip+"-- ** --", log.Ldate|log.Ltime)
+	return log.New(file, ip+" **--** ", log.Ldate|log.Ltime)
 }
 
 // KeepStats keeps monitor all container of the given host
@@ -269,7 +269,7 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
 				}
 				cfm.PidsCurrent = pidsStatsCurrent
-				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
+				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("15:04:05")
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
 				cms.put(cfm)
 				u <- nil
