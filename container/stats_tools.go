@@ -111,7 +111,8 @@ func (cms *containerMetricStack) put(cfm ParsedConatinerMetrics) bool {
 	if len(cms.ReadAbleMetrics) == defaultReadLength {
 		//cms.csFMetrics = append(cms.csFMetrics, cfm)
 		//delete the first one also the oldest one, and append the latest one
-		cms.ReadAbleMetrics = append(cms.ReadAbleMetrics[1:], cfm)
+		copy(cms.ReadAbleMetrics, cms.ReadAbleMetrics[1:])
+		cms.ReadAbleMetrics[defaultReadLength-1] = cfm
 		return true
 	}
 	cms.ReadAbleMetrics = append(cms.ReadAbleMetrics, cfm)
