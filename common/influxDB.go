@@ -42,8 +42,16 @@ func init() {
 	MetricChan = make(chan Metric, 8)
 }
 
-// Write giving tag kv and files kv to giving measurement
+// Write giving tag kv and fields kv to influxDB
 func Write() {
+	defer influCli.Close()
+
+	for m := range MetricChan {
+		interWrite(m)
+	}
+}
+
+func interWrite(m Metric) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  myDB,
 		Precision: "s",
@@ -52,16 +60,14 @@ func Write() {
 		log.Printf("err happen when new  batch points: %v", err)
 	}
 
-	for m := range MetricChan {
-		pt, err := client.NewPoint(m.Measurement, m.Tags, m.Fields, m.ReadTime)
-		if err != nil {
-			log.Printf("err happen when new point: %v", err)
-		}
-		bp.AddPoint(pt)
+	pt, err := client.NewPoint(m.Measurement, m.Tags, m.Fields, m.ReadTime)
+	if err != nil {
+		log.Printf("err happen when new point: %v", err)
+	}
+	bp.AddPoint(pt)
 
-		// Write the batch
-		if err := influCli.Write(bp); err != nil {
-			log.Printf("err happen when write the batch point: %v", err)
-		}
+	// Write the batch
+	if err := influCli.Write(bp); err != nil {
+		log.Printf("err happen when write the batch point: %v", err)
 	}
 }
