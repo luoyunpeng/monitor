@@ -115,7 +115,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		}
 		for _, container := range cs {
 			cms := NewContainerMStack("", container.ID[:12])
-			if hcmsStack.add(cms) {
+			if hcmsStack.Add(cms) {
 				waitFirst.Add(1)
 				go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
 			}
@@ -131,7 +131,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	eh.Handle("start", func(e events.Message) {
 		logger.Printf("event handler: received start event: %v", e)
 		cms := NewContainerMStack("", e.ID[:12])
-		if hcmsStack.add(cms) {
+		if hcmsStack.Add(cms) {
 			waitFirst.Add(1)
 			go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
 		}
@@ -139,7 +139,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 
 	eh.Handle("die", func(e events.Message) {
 		logger.Printf("event handler: received die event: %v", e)
-		hcmsStack.remove(e.ID[:12])
+		hcmsStack.Remove(e.ID[:12])
 	})
 
 	eventChan := make(chan events.Message)
@@ -354,7 +354,7 @@ func GetHostContainerInfo(host string) []string {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			if hoststack.hostName == host {
-				return hoststack.allNames()
+				return hoststack.AllNames()
 			}
 		}
 	}
@@ -414,7 +414,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			if hoststack.hostName == host {
-				fields["ContainerMemUsedPercentage"] = Round(hoststack.getAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
+				fields["ContainerMemUsedPercentage"] = Round(hoststack.GetAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
 			}
 		}
 	}
@@ -452,7 +452,7 @@ func WriteAllHostInfo() {
 					}
 					totalContainer += info.Containers
 					totalRunningContainer += info.ContainersRunning
-					go WriteDockerHostInfoToInfluxDB(ip, info)
+					WriteDockerHostInfoToInfluxDB(ip, info)
 				}
 			}
 			return true
