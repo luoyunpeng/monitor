@@ -27,7 +27,7 @@ func NewHostContainerMetricStack(host string) *HostContainerMetricStack {
 	return &HostContainerMetricStack{hostName: host}
 }
 
-func (s *HostContainerMetricStack) add(newCms *containerMetricStack) bool {
+func (s *HostContainerMetricStack) Add(newCms *containerMetricStack) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (s *HostContainerMetricStack) add(newCms *containerMetricStack) bool {
 	return false
 }
 
-func (s *HostContainerMetricStack) remove(id string) {
+func (s *HostContainerMetricStack) Remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -58,14 +58,14 @@ func (s *HostContainerMetricStack) isKnownContainer(cid string) (int, bool) {
 	return -1, false
 }
 
-func (s *HostContainerMetricStack) length() int {
+func (s *HostContainerMetricStack) Length() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	return len(s.cms)
 }
 
-func (s *HostContainerMetricStack) allNames() []string {
+func (s *HostContainerMetricStack) AllNames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -77,7 +77,7 @@ func (s *HostContainerMetricStack) allNames() []string {
 	return names
 }
 
-func (s *HostContainerMetricStack) getAllLastMemory() float64 {
+func (s *HostContainerMetricStack) GetAllLastMemory() float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -283,7 +283,7 @@ func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 
 	return 0
 }
 
-//return given the significant digit of float64
+// Round return given the significant digit of float64
 func Round(f float64, n int) float64 {
 	pow10N := math.Pow10(n)
 	return math.Trunc((f+0.5/pow10N)*pow10N) / pow10N
