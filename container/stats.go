@@ -155,7 +155,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	logger.Println("container first collecting Done")
 }
 
-func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
+func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
 	var (
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
@@ -182,14 +182,15 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 				return
 			default:
 				var (
-					previousCPU    uint64
-					previousSystem uint64
-
+					previousCPU            uint64
+					previousSystem         uint64
 					statsJSON              *types.StatsJSON
 					memPercent, cpuPercent float64
 					blkRead, blkWrite      uint64
 					mem, memLimit          float64
 					pidsStatsCurrent       uint64
+					timeFormat             [16]byte
+					timeFormatSlice        = timeFormat[:0]
 				)
 
 				response, err := cli.ContainerStats(ctx, cms.ID, false)
@@ -269,7 +270,8 @@ func collect(ctx context.Context, cms *containerMetricStack, cli *client.Client,
 					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
 				}
 				cfm.PidsCurrent = pidsStatsCurrent
-				cfm.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("15:04:05")
+				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
+				cfm.ReadTime = string(timeFormat[:8])
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
 				cms.Put(cfm)
 				u <- nil
