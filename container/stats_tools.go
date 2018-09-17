@@ -16,10 +16,10 @@ var (
 
 //one docker host have only one hostContainerMStack
 type HostContainerMetricStack struct {
-	mu sync.RWMutex
+	sync.RWMutex
 	//indicate which host this stats belong to
 	hostName string
-	cms      []*containerMetricStack
+	cms      []*SingalContainerMetricStack
 }
 
 // NewHostContainerMetricStack initial a HostContainerMetricStack point type
@@ -27,9 +27,9 @@ func NewHostContainerMetricStack(host string) *HostContainerMetricStack {
 	return &HostContainerMetricStack{hostName: host}
 }
 
-func (s *HostContainerMetricStack) Add(newCms *containerMetricStack) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *HostContainerMetricStack) Add(newCms *SingalContainerMetricStack) bool {
+	s.Lock()
+	defer s.Unlock()
 
 	if _, exists := s.isKnownContainer(newCms.ID); !exists {
 		s.cms = append(s.cms, newCms)
@@ -39,11 +39,11 @@ func (s *HostContainerMetricStack) Add(newCms *containerMetricStack) bool {
 }
 
 func (s *HostContainerMetricStack) Remove(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	if i, exists := s.isKnownContainer(id); exists {
-		// set the container metric to invalid for stopping the collector, also rm container metrics stack
+		// set the container metric to invalid for stopping the collector, also remove container metrics stack
 		s.cms[i].isInvalid = true
 		s.cms = append(s.cms[:i], s.cms[i+1:]...)
 	}
@@ -59,15 +59,15 @@ func (s *HostContainerMetricStack) isKnownContainer(cid string) (int, bool) {
 }
 
 func (s *HostContainerMetricStack) Length() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	return len(s.cms)
 }
 
 func (s *HostContainerMetricStack) AllNames() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	var names []string
 	for _, cm := range s.cms {
@@ -78,8 +78,8 @@ func (s *HostContainerMetricStack) AllNames() []string {
 }
 
 func (s *HostContainerMetricStack) GetAllLastMemory() float64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	var totalMem float64
 	for _, cm := range s.cms {
@@ -89,55 +89,40 @@ func (s *HostContainerMetricStack) GetAllLastMemory() float64 {
 	return totalMem
 }
 
-type containerMetricStack struct {
+type SingalContainerMetricStack struct {
 	mu sync.RWMutex
 
 	ID              string
 	ContainerName   string
 	ReadAbleMetrics []ParsedConatinerMetrics
-	Len             int
 
 	isInvalid bool
 }
 
 // NewContainerMStack initial a NewContainerMStack point type
-func NewContainerMStack(ContainerName, id string) *containerMetricStack {
-	return &containerMetricStack{
+func NewContainerMStack(ContainerName, id string) *SingalContainerMetricStack {
+	return &SingalContainerMetricStack{
 		ContainerName:   ContainerName,
 		ID:              id,
-		ReadAbleMetrics: make([]ParsedConatinerMetrics, defaultReadLength, defaultReadLength),
+		ReadAbleMetrics: make([]ParsedConatinerMetrics, 0, defaultReadLength),
 	}
 }
 
-func (cms *containerMetricStack) Put(cfm ParsedConatinerMetrics) bool {
+func (cms *SingalContainerMetricStack) Put(cfm ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
 	defer cms.mu.Unlock()
 
-	if cms.Len == defaultReadLength {
-		//cms.csFMetrics = append(cms.csFMetrics, cfm)
+	if len(cms.ReadAbleMetrics) == defaultReadLength {
 		//delete the first one also the oldest one, and append the latest one
 		copy(cms.ReadAbleMetrics, cms.ReadAbleMetrics[1:])
 		cms.ReadAbleMetrics[defaultReadLength-1] = cfm
 		return true
 	}
-	cms.ReadAbleMetrics[cms.Len] = cfm
-	cms.Len++
+	cms.ReadAbleMetrics = append(cms.ReadAbleMetrics, cfm)
 	return true
 }
 
-// Deprecated using put
-func (cms *containerMetricStack) Put2(cfm ParsedConatinerMetrics) bool {
-	cms.mu.Lock()
-	defer cms.mu.Unlock()
-
-	//cms.csFMetrics = append(cms.csFMetrics, cfm)
-	//delete the first one also the oldest one, and append the latest one
-	copy(cms.ReadAbleMetrics, cms.ReadAbleMetrics[1:])
-	cms.ReadAbleMetrics[defaultReadLength-1] = cfm
-	return true
-}
-
-func (cms *containerMetricStack) Read(num int) []ParsedConatinerMetrics {
+func (cms *SingalContainerMetricStack) Read(num int) []ParsedConatinerMetrics {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
@@ -150,18 +135,11 @@ func (cms *containerMetricStack) Read(num int) []ParsedConatinerMetrics {
 	return cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
 }
 
-func (cms *containerMetricStack) GetLatestMemory() float64 {
+func (cms *SingalContainerMetricStack) GetLatestMemory() float64 {
 	cms.mu.RLock()
 	defer cms.mu.RUnlock()
 
 	return cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
-}
-
-func (cms *containerMetricStack) Length() int {
-	cms.mu.RLock()
-	defer cms.mu.RUnlock()
-
-	return cms.Len
 }
 
 type ParsedConatinerMetrics struct {
