@@ -59,10 +59,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			close(c)
 			if dockerCli != nil {
 				logger.Println("close docker-cli and remove it from DockerCliList and host list")
-				err := dockerCli.Close()
-				if err != nil {
-					logger.Printf("close dockerCli for host err happen: %v", err)
-				}
+				dockerCli.Close()
 				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
 			}
@@ -175,24 +172,21 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 	}()
 
 	go func() {
+		var (
+			previousCPU       uint64
+			previousSystem    uint64
+			statsJSON         types.StatsJSON
+			blkRead, blkWrite uint64
+			timeFormat        [16]byte
+			timeFormatSlice   = timeFormat[:0]
+		)
+
 		for {
 			select {
 			case <-ctx.Done():
 				logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
-				var (
-					previousCPU            uint64
-					previousSystem         uint64
-					statsJSON              *types.StatsJSON
-					memPercent, cpuPercent float64
-					blkRead, blkWrite      uint64
-					mem, memLimit          float64
-					pidsStatsCurrent       uint64
-					timeFormat             [16]byte
-					timeFormatSlice        = timeFormat[:0]
-				)
-
 				response, err := cli.ContainerStats(ctx, cms.ID, false)
 				// bool value initial value is false
 				if cms.isInvalid {
@@ -202,10 +196,11 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 							logger.Printf("close container stats api response body err happen: %v", err)
 						}
 					}
-					//container stop or rm event happened or others(event that lead to stop the container), return collecting goroutine
+					//container stop or rm event happened or others(event that lead to stop the container), return collect goroutine
 					u <- errNoSuchC
 					return
 				}
+
 				if err != nil {
 					dockerDaemonErr = err
 					u <- dockerDaemonErr
@@ -214,7 +209,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				respByte, err := ioutil.ReadAll(response.Body)
 				if err != nil {
-					logger.Printf("ioutil read from response body  for "+cms.ContainerName+" err occured: %v", err)
+					logger.Printf("ioutil read from response body for %s err occured: %v", cms.ContainerName, err)
 					u <- err
 					if err == io.EOF {
 						break
@@ -225,7 +220,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 				if errUnmarshal != nil {
-					logger.Printf("Unmarshal collecting stats for "+cms.ContainerName+" err occured: %v", errUnmarshal)
+					logger.Printf("Unmarshal collecting stats for %s err occured: %v", cms.ContainerName, errUnmarshal)
 					u <- errUnmarshal
 					if errUnmarshal == io.EOF {
 						break
@@ -236,22 +231,18 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
 				previousSystem = statsJSON.PreCPUStats.SystemUsage
-				cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
+				cfm.CPUPercentage = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
 				blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
 				// default mem related metric unit is MB
-				mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
-				memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
-				memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
-				pidsStatsCurrent = statsJSON.PidsStats.Current
+				cfm.Memory = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
+				cfm.MemoryLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
+				cfm.MemoryPercentage = CalculateMemPercentUnixNoCache(cfm.MemoryLimit, cfm.Memory)
+				cfm.PidsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
 				if cms.ContainerName == "" {
 					cms.ContainerName = statsJSON.Name[1:]
 				}
-				cfm.CPUPercentage = cpuPercent
-				cfm.Memory = mem
-				cfm.MemoryPercentage = memPercent
-				cfm.MemoryLimit = memLimit
 				if isFirstCollect {
 					lastNetworkRX, cfm.NetworkRx = netRx, 0
 					lastNetworkTX, cfm.NetworkTx = netTx, 0
@@ -269,16 +260,12 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 					lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
 					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
 				}
-				cfm.PidsCurrent = pidsStatsCurrent
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
 				cfm.ReadTime = string(timeFormat[:8])
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
 				cms.Put(cfm)
 				u <- nil
-				errBodyClose := response.Body.Close()
-				if errBodyClose != nil {
-					logger.Printf("close container stats api response body err happen: %v", err)
-				}
+				response.Body.Close()
 				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 				WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)
@@ -340,7 +327,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
-				if containerStack.ID == id || containerStack.ContainerName == id {
+				if containerStack.ID == id || (len(id) >= 13 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
 					return containerStack.Read(defaultReadLength), nil
 				}
 			}
@@ -396,8 +383,20 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedCo
 	createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
+type singalHostInfo struct {
+	Name                  string
+	Images                int
+	TotalContainer        int
+	TotalRunningContainer int
+	TotalStoppedContainer int
+	NCPU                  int
+	TotalMem              int64
+	KernelVersion         string
+	OS                    string
+}
+
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
-func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
+func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log.Logger) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{})
 	tags := map[string]string{
@@ -406,27 +405,35 @@ func WriteDockerHostInfoToInfluxDB(host string, info types.Info) {
 
 	fields["hostName"] = info.Name
 	fields["imagesLen"] = info.Images
-	fields["containerTotal"] = info.Containers
-	fields["containerRunning"] = info.ContainersRunning
-	fields["containersStopped"] = info.ContainersStopped
+	fields["containerTotal"] = info.TotalContainer
+	fields["containerRunning"] = info.TotalRunningContainer
+	fields["containersStopped"] = info.TotalStoppedContainer
 	fields["ncpu"] = info.NCPU
-	fields["totalMem"] = Round(float64(info.MemTotal)/(1024*1024*1024), 2)
+	fields["totalMem"] = Round(float64(info.TotalMem)/(1024*1024*1024), 2)
 	fields["kernelVersion"] = info.KernelVersion
-	fields["os"] = info.OperatingSystem + info.Architecture
+	fields["os"] = info.OS
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			if hoststack.hostName == host {
-				fields["ContainerMemUsedPercentage"] = Round(hoststack.GetAllLastMemory()*100/float64(info.MemTotal/(1024*1024)), 2)
+				fields["ContainerMemUsedPercentage"] = Round(hoststack.GetAllLastMemory()*100/float64(info.TotalMem/(1024*1024)), 2)
 			}
 		}
 	}
 
 	createMetricAndWrite(measurement, tags, fields, time.Now())
+	logger.Println("write "+host+"  info: ",
+		fields["hostName"], fields["imagesLen"], fields["containerTotal"], fields["containerRunning"],
+		fields["containersStopped"], fields["ncpu"], fields["totalMem"], fields["kernelVersion"],
+		fields["os"], fields["ContainerMemUsedPercentage"])
 }
 
 // Calculate all docker host info and write to influxDB
 func WriteAllHostInfo() {
-	measurement := "allHost"
+	var (
+		runningDockerHost, totalContainer, totalRunningContainer int
+		measurement                                              = "allHost"
+		hostInfo                                                 singalHostInfo
+	)
 	fields := make(map[string]interface{})
 	tags := map[string]string{
 		"ALL": "all",
@@ -436,31 +443,40 @@ func WriteAllHostInfo() {
 
 	ticker := time.Tick(defaultCollectDuration + 30*time.Second)
 	go common.Write()
+
 	for range ticker {
-		runningDockerHost := 0
-		totalContainer := 0
-		totalRunningContainer := 0
+		runningDockerHost = 0
+		totalContainer = 0
+		totalRunningContainer = 0
 		DockerCliList.Range(func(key, cliTmp interface{}) bool {
 			if cli, ok := cliTmp.(*client.Client); ok {
-				_, err := cli.Ping(ctx)
 				ip, _ := key.(string)
+				info, err := cli.Info(ctx)
 				if err != nil {
-					logger.Printf(" when store all host info to influxdb,ping err: %v", err)
-				} else {
-					runningDockerHost++
-					info, err := cli.Info(ctx)
-					if err != nil {
-						logger.Printf("get docker info error occured: %v", err)
-					}
-					totalContainer += info.Containers
-					totalRunningContainer += info.ContainersRunning
-					WriteDockerHostInfoToInfluxDB(ip, info)
+					logger.Printf(ip+"get docker info error occured: %v", err)
+					return true
 				}
+				runningDockerHost++
+				hostInfo = singalHostInfo{
+					Name:                  info.Name,
+					Images:                info.Images,
+					TotalContainer:        info.Containers,
+					TotalRunningContainer: info.ContainersRunning,
+					NCPU:                  info.NCPU,
+					TotalMem:              info.MemTotal,
+					KernelVersion:         info.KernelVersion,
+					OS:                    info.OperatingSystem + info.Architecture,
+				}
+				hostInfo.TotalStoppedContainer = hostInfo.TotalContainer - hostInfo.TotalRunningContainer
+				totalContainer += info.Containers
+				totalRunningContainer += info.ContainersRunning
+				WriteDockerHostInfoToInfluxDB(ip, hostInfo, logger)
 			}
+
 			return true
 		})
 		if runningDockerHost == 0 {
-			logger.Println("no more docker daemono is running, return store all host info to influxdb")
+			logger.Println("no more docker daemon is running, return store all host info to influxDB")
 			return
 		}
 		fields["hostNum"] = len(common.HostIPs)
@@ -471,6 +487,9 @@ func WriteAllHostInfo() {
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 
 		createMetricAndWrite(measurement, tags, fields, time.Now())
+		logger.Printf("write all host info: %d, %d, %d, %d, %d, %d",
+			fields["hostNum"], runningDockerHost, fields["dockerdDead"], totalContainer,
+			totalRunningContainer, fields["totalStopped"])
 	}
 }
 

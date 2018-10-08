@@ -96,7 +96,8 @@ type SingalContainerMetricStack struct {
 	ContainerName   string
 	ReadAbleMetrics []ParsedConatinerMetrics
 
-	isInvalid bool
+	isInvalid      bool
+	isFirstCollect bool
 }
 
 // NewContainerMStack initial a NewContainerMStack point type
@@ -105,6 +106,7 @@ func NewContainerMStack(ContainerName, id string) *SingalContainerMetricStack {
 		ContainerName:   ContainerName,
 		ID:              id,
 		ReadAbleMetrics: make([]ParsedConatinerMetrics, 0, defaultReadLength),
+		isFirstCollect:  true,
 	}
 }
 
@@ -158,53 +160,7 @@ type ParsedConatinerMetrics struct {
 	ReadTimeForInfluxDB time.Time
 }
 
-/*
-func Parse(respByte []byte) (*ParsedConatinerMetrics, error) {
-	var (
-		previousCPU    uint64
-		previousSystem uint64
-
-		statsJSON              *types.StatsJSON
-		memPercent, cpuPercent float64
-		blkRead, blkWrite      uint64 // Only used on Linux
-		mem, memLimit          float64
-		pidsStatsCurrent       uint64
-	)
-
-	err := json.Unmarshal(respByte, &statsJSON)
-	if err != nil {
-		return nil, err
-	}
-
-	previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
-	previousSystem = statsJSON.PreCPUStats.SystemUsage
-	cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
-	blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
-	mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats) / (1024 * 1024)
-	memLimit = float64(statsJSON.MemoryStats.Limit) / (1024 * 1024)
-	memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
-	pidsStatsCurrent = statsJSON.PidsStats.Current
-	netRx, netTx := CalculateNetwork(statsJSON.Networks)
-
-	//
-	s := &ParsedConatinerMetrics{}
-	//s.Name = statsJSON.Name[1:]
-	//s.ContainerID = statsJSON.ID
-	s.CPUPercentage = cpuPercent
-	s.Memory = mem
-	s.MemoryPercentage = memPercent
-	s.MemoryLimit = memLimit
-	s.NetworkRx = netRx
-	s.NetworkTx = netTx
-	s.BlockRead = float64(blkRead)
-	s.BlockWrite = float64(blkWrite)
-	s.PidsCurrent = pidsStatsCurrent
-	s.ReadTime = statsJSON.Read.Add(time.Hour * 8).Format("2006-01-02 15:04:05")
-	s.ReadTimeForInfluxDB = statsJSON.Read.Add(time.Hour * 8)
-	return s, nil
-}*/
-
-func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v *types.StatsJSON) float64 {
+func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v types.StatsJSON) float64 {
 	var (
 		cpuPercent = 0.0
 		// calculate the change for the cpu usage of the container in between readings
