@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
-	"github.com/luoyunpeng/monitor/host"
 )
 
 // ContainerStats handles GET requests on /container/stats/:id?host=<hostName>
@@ -253,6 +252,52 @@ func ContainerInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cinfo)
 }
 
+func AddDockerhost(ctx *gin.Context) {
+	host := ctx.Params.ByName("host")
+	//port := ctx.DefaultQuery("host", "2375")
+
+	if !container.IsKnownHost(host) {
+		common.HostIPs = append(common.HostIPs, host)
+	}
+
+	if _, ok := container.AllHostList.Load(host); ok {
+		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
+		return
+	}
+
+	cli, err := common.InitClient(host)
+	if err != nil {
+		ctx.JSONP(http.StatusNotFound, err.Error())
+		return
+	}
+
+	go container.KeepStats(cli, host)
+	container.DockerCliList.Store(host, cli)
+	ctx.JSONP(http.StatusOK, "successfully add")
+}
+
+func StopDockerHostCollect(ctx *gin.Context) {
+	host := ctx.Params.ByName("host")
+
+	if !container.IsKnownHost(host) {
+		ctx.JSONP(http.StatusNotFound, errors.New("host does not exist, please check again"))
+		return
+	}
+
+	if hoststackTmp, ok := container.AllHostList.Load(host); ok {
+		if hoststack, ok := hoststackTmp.(*container.HostContainerMetricStack); ok {
+			hoststack.StopCollect()
+			time.Sleep(5 * time.Millisecond)
+			if container.GetHostContainerInfo(host) == nil {
+				ctx.JSONP(http.StatusOK, "successfully stopped")
+				return
+			}
+		}
+	}
+
+	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
+}
+
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -340,6 +385,7 @@ func ContainerLogs(ctx *gin.Context) {
 }
 
 // ContainerLogs handles GET requests on "/host/mem" for localhost
+/*
 func HostMemInfo(ctx *gin.Context) {
 	vMem, err := host.VirtualMemory()
 	if err != nil {
@@ -363,7 +409,7 @@ func HostMemInfo(ctx *gin.Context) {
 	}
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSONP(http.StatusOK, hostMemInfo)
-}
+}*/
 
 func checkParam(id, hostName string) error {
 	if len(id) == 0 || len(hostName) == 0 {

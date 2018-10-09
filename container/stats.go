@@ -87,7 +87,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 				cancel()
 				return
 			case <-ctx.Done():
-				logger.Printf("connect to docker daemon time out, stop container event listener")
+				//logger.Printf("connect to docker daemon error or stop collect by call method, stop container event listener")
 				return
 			}
 		}
@@ -96,7 +96,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
 
-	hcmsStack := NewHostContainerMetricStack(ip)
+	hcmsStack := NewHostContainerMetricStack(ip, ctx, logger, cancel)
 	AllHostList.Store(ip, hcmsStack)
 	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	// getContainerList simulates creation event for all previously existing
@@ -114,7 +114,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.Add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
+				go collect(cms, dockerCli, waitFirst,hcmsStack)
 			}
 		}
 	}
@@ -130,7 +130,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.Add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, cms, dockerCli, waitFirst, logger, cancel, ip)
+			go collect(cms, dockerCli, waitFirst,hcmsStack)
 		}
 	})
 
@@ -152,7 +152,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	logger.Println("container first collecting Done")
 }
 
-func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, logger *log.Logger, cancel context.CancelFunc, host string) {
+func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, hcmsStack *HostContainerMetricStack) {
 	var (
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
@@ -183,17 +183,17 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 		for {
 			select {
-			case <-ctx.Done():
-				logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
+			case <-hcmsStack.ctx.Done():
+				//logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
-				response, err := cli.ContainerStats(ctx, cms.ID, false)
+				response, err := cli.ContainerStats(hcmsStack.ctx, cms.ID, false)
 				// bool value initial value is false
 				if cms.isInvalid {
 					if response.Body != nil {
 						errBodyClose := response.Body.Close()
 						if errBodyClose != nil {
-							logger.Printf("close container stats api response body err happen: %v", err)
+							hcmsStack.logger.Printf("close container stats api response body err happen: %v", err)
 						}
 					}
 					//container stop or rm event happened or others(event that lead to stop the container), return collect goroutine
@@ -209,7 +209,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				respByte, err := ioutil.ReadAll(response.Body)
 				if err != nil {
-					logger.Printf("ioutil read from response body for %s err occured: %v", cms.ContainerName, err)
+					hcmsStack.logger.Printf("ioutil read from response body for %s err occured: %v", cms.ContainerName, err)
 					u <- err
 					if err == io.EOF {
 						break
@@ -220,7 +220,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 				if errUnmarshal != nil {
-					logger.Printf("Unmarshal collecting stats for %s err occured: %v", cms.ContainerName, errUnmarshal)
+					hcmsStack.logger.Printf("Unmarshal collecting stats for %s err occured: %v", cms.ContainerName, errUnmarshal)
 					u <- errUnmarshal
 					if errUnmarshal == io.EOF {
 						break
@@ -266,8 +266,8 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				cms.Put(cfm)
 				u <- nil
 				response.Body.Close()
-				logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-				WriteMetricToInfluxDB(host, cms.ContainerName, cfm)
+				hcmsStack.logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+				WriteMetricToInfluxDB(hcmsStack.hostName, cms.ContainerName, cfm)
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -280,11 +280,11 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes == defaultMaxTimeoutTimes {
-				_, err := cli.Ping(ctx)
+				_, err := cli.Ping(hcmsStack.ctx)
 				if err != nil {
-					logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+					hcmsStack.logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
 				}
-				cancel()
+				hcmsStack.cancel()
 				return
 			}
 			// if this is the first stat you get, release WaitGroup
@@ -293,7 +293,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				waitFirst.Done()
 			}
 			timeoutTimes++
-			logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
+			hcmsStack.logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
 		case err := <-u:
 			//EOF error maybe mean docker daemon err
 			if err == io.EOF {
@@ -301,10 +301,10 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 			}
 
 			if err == errNoSuchC {
-				logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
+				hcmsStack.logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 				return
 			} else if err != nil && err == dockerDaemonErr {
-				logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
+				hcmsStack.logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
 				return
 			}
 			if err != nil {
@@ -316,7 +316,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				isFirstCollect = false
 				waitFirst.Done()
 			}
-		case <-ctx.Done():
+		case <-hcmsStack.ctx.Done():
 			return
 		}
 	}
@@ -327,7 +327,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
 		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
 			for _, containerStack := range hoststack.cms {
-				if containerStack.ID == id || (len(id) >= 13 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
+				if containerStack.ID == id || (len(id) >= 12 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
 					return containerStack.Read(defaultReadLength), nil
 				}
 			}
