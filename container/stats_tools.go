@@ -1,6 +1,8 @@
 package container
 
 import (
+	"context"
+	"log"
 	"math"
 	"strings"
 	"sync"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/json-iterator/go"
+	"github.com/luoyunpeng/monitor/common"
 )
 
 var (
@@ -17,14 +20,17 @@ var (
 //one docker host have only one hostContainerMStack
 type HostContainerMetricStack struct {
 	sync.RWMutex
+	ctx    context.Context
+	cancel context.CancelFunc
 	//indicate which host this stats belong to
+	logger   *log.Logger
 	hostName string
 	cms      []*SingalContainerMetricStack
 }
 
 // NewHostContainerMetricStack initial a HostContainerMetricStack point type
-func NewHostContainerMetricStack(host string) *HostContainerMetricStack {
-	return &HostContainerMetricStack{hostName: host}
+func NewHostContainerMetricStack(host string, ctx context.Context, logger *log.Logger, cancel context.CancelFunc) *HostContainerMetricStack {
+	return &HostContainerMetricStack{hostName: host, ctx: ctx, logger: logger, cancel: cancel}
 }
 
 func (s *HostContainerMetricStack) Add(newCms *SingalContainerMetricStack) bool {
@@ -47,6 +53,19 @@ func (s *HostContainerMetricStack) Remove(id string) {
 		s.cms[i].isInvalid = true
 		s.cms = append(s.cms[:i], s.cms[i+1:]...)
 	}
+}
+
+func (s *HostContainerMetricStack) StopCollect() {
+	s.Lock()
+	defer s.Unlock()
+
+	//set all containerStack status to invalid, to stop all collecting
+	for _, containerStack := range s.cms {
+		containerStack.isInvalid = true
+	}
+
+	s.cancel()
+	s.logger.Println("stop all container collect")
 }
 
 func (s *HostContainerMetricStack) isKnownContainer(cid string) (int, bool) {
@@ -221,4 +240,14 @@ func CalculateMemPercentUnixNoCache(limit float64, usedNoCache float64) float64 
 func Round(f float64, n int) float64 {
 	pow10N := math.Pow10(n)
 	return math.Trunc((f+0.5/pow10N)*pow10N) / pow10N
+}
+
+func IsKnownHost(host string) bool {
+	for _, v := range common.HostIPs {
+		if v == host {
+			return true
+		}
+	}
+
+	return false
 }
