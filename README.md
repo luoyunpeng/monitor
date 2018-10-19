@@ -1,7 +1,7 @@
 docker monitor
 ==============
 
-This Project is based on docker engine api, also refer to some docker command cline source code
+This Project is based on docker engine api, also refer to some docker command client source code
 
 Build
 ==============
