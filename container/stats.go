@@ -114,7 +114,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.Add(cms) {
 				waitFirst.Add(1)
-				go collect(cms, dockerCli, waitFirst,hcmsStack)
+				go collect(cms, dockerCli, waitFirst, hcmsStack)
 			}
 		}
 	}
@@ -130,7 +130,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.Add(cms) {
 			waitFirst.Add(1)
-			go collect(cms, dockerCli, waitFirst,hcmsStack)
+			go collect(cms, dockerCli, waitFirst, hcmsStack)
 		}
 	})
 
@@ -187,20 +187,13 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 				//logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
-				response, err := cli.ContainerStats(hcmsStack.ctx, cms.ID, false)
-				// bool value initial value is false
 				if cms.isInvalid {
-					if response.Body != nil {
-						errBodyClose := response.Body.Close()
-						if errBodyClose != nil {
-							hcmsStack.logger.Printf("close container stats api response body err happen: %v", err)
-						}
-					}
 					//container stop or rm event happened or others(event that lead to stop the container), return collect goroutine
 					u <- errNoSuchC
 					return
 				}
 
+				response, err := cli.ContainerStats(hcmsStack.ctx, cms.ID, false)
 				if err != nil {
 					dockerDaemonErr = err
 					u <- dockerDaemonErr

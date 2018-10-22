@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,6 +16,14 @@ import (
 	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/container"
 )
+
+type RepMetric struct {
+	StatusCode int    `json:"statusCode"`
+	Status     int    `json:"status"`
+	Msg        string `json:"msg"`
+
+	Metric interface{} `json:"metric"`
+}
 
 // ContainerStats handles GET requests on /container/stats/:id?host=<hostName>
 // if id (container id or name) and host is present, response all metric for the container
@@ -43,13 +51,13 @@ func ContainerMem(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -64,8 +72,7 @@ func ContainerMem(ctx *gin.Context) {
 			ReadTime string
 		}{Mem: cm.Memory, ReadTime: cm.ReadTime})
 	}
-
-	ctx.JSONP(http.StatusOK, cMem)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMem})
 }
 
 // ContainerMemPercent handles GET requests on /container/metric/mempercent/:id?host=<hostName>
@@ -75,13 +82,13 @@ func ContainerMemPercent(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -97,7 +104,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 		cMemPercent.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
-	ctx.JSONP(http.StatusOK, cMemPercent)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemPercent})
 }
 
 // ContainerMemLimit handles GET requests on /container/metric/memlimit/:id?host=<hostName>
@@ -107,13 +114,13 @@ func ContainerMemLimit(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -127,7 +134,7 @@ func ContainerMemLimit(ctx *gin.Context) {
 		cMemLimit.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
-	ctx.JSONP(http.StatusOK, cMemLimit)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemLimit})
 }
 
 // ContainerCPU handles GET requests on /container/metric/cpu/:id?host=<hostName>
@@ -137,13 +144,13 @@ func ContainerCPU(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -159,7 +166,7 @@ func ContainerCPU(ctx *gin.Context) {
 		}{CPU: cm.CPUPercentage, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, cCPU)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cCPU})
 }
 
 // ContainerNetworkIO handles GET requests on /container/metric/networkio/:id?host=<hostName>
@@ -169,13 +176,13 @@ func ContainerNetworkIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -193,7 +200,7 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, cNetworkIO)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cNetworkIO})
 }
 
 // ContainerBlockIO handles GET requests on /container/metric/blockio/:id?host=<hostName>
@@ -203,13 +210,13 @@ func ContainerBlockIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
 	csm, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -227,7 +234,7 @@ func ContainerBlockIO(ctx *gin.Context) {
 		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, cBlockIO)
+	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cBlockIO})
 }
 
 // ContainerInfo handles GET requests on /container/info?host=<hostName>
@@ -280,7 +287,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
 	if !container.IsKnownHost(host) {
-		ctx.JSONP(http.StatusNotFound, errors.New("host does not exist, please check again"))
+		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
@@ -337,7 +344,7 @@ func ContainerLogs(ctx *gin.Context) {
 	if err := checkParam(id, hostName); err != nil {
 		err = ws.WriteMessage(1, []byte(err.Error()))
 		if err != nil {
-			fmt.Printf("err ccured when write check parameter error for access container log: %v", err)
+			log.Printf("err ccured when write check parameter error for access container log: %v", err)
 		}
 		return
 	}
@@ -370,7 +377,7 @@ func ContainerLogs(ctx *gin.Context) {
 				//
 				err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
 				if err != nil {
-					fmt.Printf("err occured when write container log to websocket client: %v", err)
+					log.Printf("err occured when write container log to websocket client: %v", err)
 					return
 				}
 			}
@@ -378,7 +385,7 @@ func ContainerLogs(ctx *gin.Context) {
 	} else {
 		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the host"))
 		if errLoad != nil {
-			fmt.Printf("err occured when write load err log to websocket client: %v", errLoad)
+			log.Printf("err occured when write load err log to websocket client: %v", errLoad)
 		}
 		return
 	}
