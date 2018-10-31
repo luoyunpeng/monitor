@@ -44,7 +44,7 @@ func ChangeContainerStatus(id, status string) error {
 		return errInit
 	}
 	//c_id is the primary key, update will only affect one row in table b_container_service
-	_, err := db.Exec("update "+tableContainer+" set status = ? and  where c_id = ?", status, id)
+	_, err := db.Exec("update "+tableContainer+" set status = ? where c_id = ?", status, id)
 	if err != nil {
 		return err
 	}
