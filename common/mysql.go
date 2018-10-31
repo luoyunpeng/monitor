@@ -65,7 +65,7 @@ func QueryContainerStatus(id string) (int, error) {
 		return -100, errInit
 	}
 	status := -100
-	err = db.QueryRow("SELECT status from " + tableContainer).Scan(&status)
+	err = db.QueryRow("SELECT status from "+tableContainer+" where c_id = ?", id).Scan(&status)
 	if err != nil {
 		/*if err == sql.ErrNoRows{
 			no row select
