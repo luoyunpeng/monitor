@@ -1,7 +1,6 @@
 package container
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -43,7 +42,8 @@ func initLog(ip string) *log.Logger {
 		return nil
 	}
 
-	return log.New(bufio.NewWriterSize(file, 128*(len(common.HostIPs)+1)), "", log.Ldate|log.Ltime)
+	//return log.New(bufio.NewWriterSize(file, 128*(len(common.HostIPs)+1)), "", log.Ldate|log.Ltime)
+	return log.New(file, "", log.Ldate|log.Ltime)
 }
 
 // KeepStats keeps monitor all container of the given host
@@ -260,18 +260,18 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 					lastNetworkTX, cfm.NetworkTx = netTx, 0
 
 					//block io
-					lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
-					lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
+					lastBlockRead, cfm.BlockRead = Round(float64(blkRead/(1024*1024)), 3), 0
+					lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite/(1024*1024)), 3), 0
 				} else {
 					//network io
 					lastNetworkRX, cfm.NetworkRx = netRx, Round(netRx-lastNetworkRX, 3)
 					lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
 
 					//block io
-					tmpRead := Round(float64(blkRead)/(1024*1024), 3)
-					tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
-					lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
-					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
+					tmpRead := Round(float64(blkRead/(1024*1024)), 3)
+					tmpWrite := Round(float64(blkWrite/(1024*1024)), 3)
+					lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead/(1024*1024))-lastBlockRead, 3)
+					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite/(1024*1024))-lastBlockWrite, 3)
 				}
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
 				cfm.ReadTime = string(timeFormat[:8])
