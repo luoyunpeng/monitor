@@ -279,7 +279,7 @@ func AddDockerhost(ctx *gin.Context) {
 	}
 	_, errPing := cli.Ping(context.Background())
 	if errPing != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSONP(http.StatusNotFound, errPing.Error())
 		return
 	}
 
