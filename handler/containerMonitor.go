@@ -277,6 +277,11 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
+	_, errPing := cli.Ping(context.Background())
+	if errPing != nil {
+		ctx.JSONP(http.StatusNotFound, err.Error())
+		return
+	}
 
 	go container.KeepStats(cli, host)
 	container.DockerCliList.Store(host, cli)

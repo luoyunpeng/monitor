@@ -60,9 +60,9 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			close(c)
 			if dockerCli != nil {
 				logger.Println("close docker-cli and remove it from DockerCliList and host list")
-				dockerCli.Close()
 				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
+				dockerCli.Close()
 			}
 		}()
 
@@ -279,8 +279,10 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 				cms.Put(cfm)
 				u <- nil
 				response.Body.Close()
-				hcmsStack.logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-				WriteMetricToInfluxDB(hcmsStack.hostName, cms.ContainerName, cfm)
+				if !cms.isInvalid {
+					hcmsStack.logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+					WriteMetricToInfluxDB(hcmsStack.hostName, cms.ContainerName, cfm)
+				}
 				time.Sleep(defaultCollectDuration)
 			}
 		}
@@ -318,6 +320,9 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 				return
 			} else if err != nil && err == dockerDaemonErr {
 				hcmsStack.logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
+				//if strings.Contains(err.Error(),"Is the docker daemon running?") {
+				//	hcmsStack.cancel()
+				//}
 				return
 			}
 			if err != nil {
@@ -451,7 +456,6 @@ func WriteAllHostInfo() {
 	tags := map[string]string{
 		"ALL": "all",
 	}
-	ctx := context.Background()
 	logger := initLog("all-host")
 
 	ticker := time.Tick(defaultCollectDuration + 30*time.Second)
@@ -462,6 +466,8 @@ func WriteAllHostInfo() {
 		totalContainer = 0
 		totalRunningContainer = 0
 		DockerCliList.Range(func(key, cliTmp interface{}) bool {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
 			if cli, ok := cliTmp.(*client.Client); ok {
 				ip, _ := key.(string)
 				info, err := cli.Info(ctx)
