@@ -458,7 +458,7 @@ func WriteAllHostInfo() {
 	}
 	logger := initLog("all-host")
 
-	ticker := time.Tick(defaultCollectDuration + 30*time.Second)
+	ticker := time.Tick(defaultCollectDuration*5)
 	go common.Write()
 
 	for range ticker {
@@ -472,7 +472,7 @@ func WriteAllHostInfo() {
 				ip, _ := key.(string)
 				info, err := cli.Info(ctx)
 				if err != nil {
-					logger.Printf(ip+"get docker info error occured: %v", err)
+					logger.Printf(ip+" get docker info error occured: %v", err)
 					return true
 				}
 				runningDockerHost++
