@@ -48,11 +48,15 @@ func initLog(ip string) *log.Logger {
 
 // KeepStats keeps monitor all container of the given host
 func KeepStats(dockerCli *client.Client, ip string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	logger := initLog(ip)
 	if logger == nil {
 		return
 	}
+
+	hcmsStack := NewHostContainerMetricStack(ip, logger)
+	AllHostList.Store(ip, hcmsStack)
+
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
 	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
@@ -60,8 +64,8 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			close(c)
 			if dockerCli != nil {
 				logger.Println("close docker-cli and remove it from DockerCliList and host list")
-				DockerCliList.Delete(ip)
 				AllHostList.Delete(ip)
+				DockerCliList.Delete(ip)
 				dockerCli.Close()
 			}
 		}()
@@ -85,9 +89,9 @@ func KeepStats(dockerCli *client.Client, ip string) {
 				c <- event
 			case err := <-errq:
 				logger.Printf("host: err happen when listen docker event: %v", err)
-				cancel()
+				hcmsStack.StopCollect()
 				return
-			case <-ctx.Done():
+			case <-hcmsStack.Done:
 				//logger.Printf("connect to docker daemon error or stop collect by call method, stop container event listener")
 				return
 			}
@@ -97,8 +101,6 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
 
-	hcmsStack := NewHostContainerMetricStack(ip, ctx, logger, cancel)
-	AllHostList.Store(ip, hcmsStack)
 	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
@@ -112,10 +114,14 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			return
 		}
 		for _, container := range cs {
+			_, isKnown := hcmsStack.isKnownContainer(container.ID[:12])
+			if isKnown {
+				continue
+			}
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.Add(cms) {
 				waitFirst.Add(1)
-				go collect(cms, dockerCli, waitFirst, hcmsStack)
+				go collect(ctx, cms, dockerCli, waitFirst, hcmsStack)
 			}
 		}
 	}
@@ -131,7 +137,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 		cms := NewContainerMStack("", e.ID[:12])
 		if hcmsStack.Add(cms) {
 			waitFirst.Add(1)
-			go collect(cms, dockerCli, waitFirst, hcmsStack)
+			go collect(ctx, cms, dockerCli, waitFirst, hcmsStack)
 		}
 	})
 
@@ -170,7 +176,7 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	logger.Println("container first collecting Done")
 }
 
-func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, hcmsStack *HostContainerMetricStack) {
+func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, hcmsStack *HostContainerMetricStack) {
 	var (
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
@@ -201,7 +207,7 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 
 		for {
 			select {
-			case <-hcmsStack.ctx.Done():
+			case <-hcmsStack.Done:
 				//logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
@@ -211,7 +217,7 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 					return
 				}
 
-				response, err := cli.ContainerStats(hcmsStack.ctx, cms.ID, false)
+				response, err := cli.ContainerStats(ctx, cms.ID, false)
 				if err != nil {
 					dockerDaemonErr = err
 					u <- dockerDaemonErr
@@ -290,16 +296,17 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 
 	timeoutTimes := 0
 	for {
+		t := time.NewTimer(defaultCollectTimeOut)
 		select {
-		case <-time.After(defaultCollectTimeOut):
+		case <-t.C:
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes == defaultMaxTimeoutTimes {
-				_, err := cli.Ping(hcmsStack.ctx)
+				_, err := cli.Ping(ctx)
 				if err != nil {
 					hcmsStack.logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
 				}
-				hcmsStack.cancel()
+				hcmsStack.StopCollect()
 				return
 			}
 			// if this is the first stat you get, release WaitGroup
@@ -310,6 +317,7 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 			timeoutTimes++
 			hcmsStack.logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
 		case err := <-u:
+			t.Stop()
 			//EOF error maybe mean docker daemon err
 			if err == io.EOF {
 				break
@@ -334,7 +342,8 @@ func collect(cms *SingalContainerMetricStack, cli *client.Client, waitFirst *syn
 				isFirstCollect = false
 				waitFirst.Done()
 			}
-		case <-hcmsStack.ctx.Done():
+		case <-hcmsStack.Done:
+			t.Stop()
 			return
 		}
 	}
@@ -450,7 +459,10 @@ func WriteAllHostInfo() {
 	var (
 		runningDockerHost, totalContainer, totalRunningContainer int
 		measurement                                              = "allHost"
+		info                                                     types.Info
 		hostInfo                                                 singalHostInfo
+
+		infoErr error
 	)
 	fields := make(map[string]interface{})
 	tags := map[string]string{
@@ -458,7 +470,7 @@ func WriteAllHostInfo() {
 	}
 	logger := initLog("all-host")
 
-	ticker := time.Tick(defaultCollectDuration*5)
+	ticker := time.Tick(defaultCollectDuration * 5)
 	go common.Write()
 
 	for range ticker {
@@ -470,9 +482,9 @@ func WriteAllHostInfo() {
 			defer cancel()
 			if cli, ok := cliTmp.(*client.Client); ok {
 				ip, _ := key.(string)
-				info, err := cli.Info(ctx)
-				if err != nil {
-					logger.Printf(ip+" get docker info error occured: %v", err)
+				info, infoErr = cli.Info(ctx)
+				if infoErr != nil {
+					logger.Printf(ip+" get docker info error occured: %v", infoErr)
 					return true
 				}
 				runningDockerHost++
