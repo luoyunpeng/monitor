@@ -1,7 +1,6 @@
 package container
 
 import (
-	"context"
 	"log"
 	"math"
 	"strings"
@@ -20,8 +19,8 @@ var (
 //one docker host have only one hostContainerMStack
 type HostContainerMetricStack struct {
 	sync.RWMutex
-	ctx    context.Context
-	cancel context.CancelFunc
+
+	Done chan struct{}
 	//indicate which host this stats belong to
 	logger   *log.Logger
 	hostName string
@@ -29,8 +28,8 @@ type HostContainerMetricStack struct {
 }
 
 // NewHostContainerMetricStack initial a HostContainerMetricStack point type
-func NewHostContainerMetricStack(host string, ctx context.Context, logger *log.Logger, cancel context.CancelFunc) *HostContainerMetricStack {
-	return &HostContainerMetricStack{hostName: host, ctx: ctx, logger: logger, cancel: cancel}
+func NewHostContainerMetricStack(host string, logger *log.Logger) *HostContainerMetricStack {
+	return &HostContainerMetricStack{hostName: host, logger: logger, Done: make(chan struct{})}
 }
 
 func (s *HostContainerMetricStack) Add(newCms *SingalContainerMetricStack) bool {
@@ -64,7 +63,7 @@ func (s *HostContainerMetricStack) StopCollect() {
 		containerStack.isInvalid = true
 	}
 
-	s.cancel()
+	close(s.Done)
 	s.logger.Println("stop all container collect")
 }
 
