@@ -114,10 +114,6 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			return
 		}
 		for _, container := range cs {
-			_, isKnown := hcmsStack.isKnownContainer(container.ID[:12])
-			if isKnown {
-				continue
-			}
 			cms := NewContainerMStack("", container.ID[:12])
 			if hcmsStack.Add(cms) {
 				waitFirst.Add(1)
