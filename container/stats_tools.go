@@ -20,6 +20,7 @@ var (
 type HostContainerMetricStack struct {
 	sync.RWMutex
 
+	// Done close means that this host has been canceled for monitoring
 	Done chan struct{}
 	//indicate which host this stats belong to
 	logger   *log.Logger
@@ -34,29 +35,29 @@ func NewHostContainerMetricStack(host string, logger *log.Logger) *HostContainer
 
 func (s *HostContainerMetricStack) Add(newCms *SingalContainerMetricStack) bool {
 	s.Lock()
-	defer s.Unlock()
 
-	if _, exists := s.isKnownContainer(newCms.ID); !exists {
+	if s.isKnownContainer(newCms.ID) == -1 {
 		s.cms = append(s.cms, newCms)
+		s.Unlock()
 		return true
 	}
+	s.Unlock()
 	return false
 }
 
 func (s *HostContainerMetricStack) Remove(id string) {
 	s.Lock()
-	defer s.Unlock()
 
-	if i, exists := s.isKnownContainer(id); exists {
+	if i := s.isKnownContainer(id); i != -1 {
 		// set the container metric to invalid for stopping the collector, also remove container metrics stack
 		s.cms[i].isInvalid = true
 		s.cms = append(s.cms[:i], s.cms[i+1:]...)
 	}
+	s.Unlock()
 }
 
 func (s *HostContainerMetricStack) StopCollect() {
 	s.Lock()
-	defer s.Unlock()
 
 	//set all containerStack status to invalid, to stop all collecting
 	for _, containerStack := range s.cms {
@@ -65,44 +66,47 @@ func (s *HostContainerMetricStack) StopCollect() {
 
 	close(s.Done)
 	s.logger.Println("stop all container collect")
+	s.Unlock()
 }
 
-func (s *HostContainerMetricStack) isKnownContainer(cid string) (int, bool) {
+//
+func (s *HostContainerMetricStack) isKnownContainer(cid string) int {
 	for i, c := range s.cms {
 		if c.ID == cid || c.ContainerName == cid {
-			return i, true
+			return i
 		}
 	}
-	return -1, false
+	return -1
 }
 
 func (s *HostContainerMetricStack) Length() int {
 	s.RLock()
-	defer s.RUnlock()
+	cmsLen := len(s.cms)
+	s.RUnlock()
 
-	return len(s.cms)
+	return cmsLen
 }
 
 func (s *HostContainerMetricStack) AllNames() []string {
 	s.RLock()
-	defer s.RUnlock()
 
 	var names []string
 	for _, cm := range s.cms {
 		names = append(names, cm.ContainerName)
 	}
+	s.RUnlock()
 
 	return names
 }
 
 func (s *HostContainerMetricStack) GetAllLastMemory() float64 {
 	s.RLock()
-	defer s.RUnlock()
 
 	var totalMem float64
 	for _, cm := range s.cms {
 		totalMem += cm.GetLatestMemory()
 	}
+	s.RUnlock()
 
 	return totalMem
 }
@@ -130,36 +134,44 @@ func NewContainerMStack(ContainerName, id string) *SingalContainerMetricStack {
 
 func (cms *SingalContainerMetricStack) Put(cfm ParsedConatinerMetrics) bool {
 	cms.mu.Lock()
-	defer cms.mu.Unlock()
 
 	if len(cms.ReadAbleMetrics) == defaultReadLength {
 		//delete the first one also the oldest one, and append the latest one
 		copy(cms.ReadAbleMetrics, cms.ReadAbleMetrics[1:])
 		cms.ReadAbleMetrics[defaultReadLength-1] = cfm
+		cms.mu.Unlock()
 		return true
 	}
 	cms.ReadAbleMetrics = append(cms.ReadAbleMetrics, cfm)
+	cms.mu.Unlock()
 	return true
 }
 
 func (cms *SingalContainerMetricStack) Read(num int) []ParsedConatinerMetrics {
 	cms.mu.RLock()
-	defer cms.mu.RUnlock()
 
 	if len(cms.ReadAbleMetrics) == 0 {
+		cms.mu.RUnlock()
 		return nil
 	}
+	var rdMetrics []ParsedConatinerMetrics
 	if len(cms.ReadAbleMetrics) >= num {
-		return cms.ReadAbleMetrics[:num]
+		rdMetrics = cms.ReadAbleMetrics[:num]
+		cms.mu.RUnlock()
+		return rdMetrics
 	}
-	return cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
+
+	rdMetrics = cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
+	cms.mu.RUnlock()
+	return rdMetrics
 }
 
 func (cms *SingalContainerMetricStack) GetLatestMemory() float64 {
 	cms.mu.RLock()
-	defer cms.mu.RUnlock()
+	latestMem := cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
+	cms.mu.RUnlock()
 
-	return cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
+	return latestMem
 }
 
 type ParsedConatinerMetrics struct {

@@ -300,7 +300,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 			if timeoutTimes == defaultMaxTimeoutTimes {
 				_, err := cli.Ping(ctx)
 				if err != nil {
-					hcmsStack.logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+					hcmsStack.logger.Printf("time out for collecting "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
 				}
 				hcmsStack.StopCollect()
 				return
