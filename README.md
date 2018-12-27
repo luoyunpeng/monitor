@@ -1,22 +1,11 @@
-docker monitor
-==============
+# docker monitor
 
-This Project is based on docker engine api, also refer to some docker command client source code
+This Project is based on golang docker engine api, also refer to some docker command line source code,
+and offer container memory, CPU, networkIO  blockIO metric rest api with gin and real time log of running 
+container with websocket
 
-Build
-==============
+## Build a linux binary
 
-`monitor` is developed with golang
-
-Build a linux binary
-
-```
-$ go build -tags=jsoniter monitor.go
-```
-
-Or
-
-```
-chmod +x build.sh
-sh build.sh
+```sh
+go build -tags=jsoniter -mod=vendor
 ```
