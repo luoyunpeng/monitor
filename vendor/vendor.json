@@ -13,12 +13,6 @@
 			"revisionTime": "2018-06-25T20:58:01Z"
 		},
 		{
-			"checksumSHA1": "ufbTJH0jaNtr/P4Lg49MS9DoBm4=",
-			"path": "github.com/ahmetb/dlog",
-			"revision": "4fb5f8204f26b45ef2445bd98bc04fccf04a3e0a",
-			"revisionTime": "2017-01-05T20:53:44Z"
-		},
-		{
 			"checksumSHA1": "Gj+xR1VgFKKmFXYOJMnAczC3Znk=",
 			"path": "github.com/docker/distribution/digestset",
 			"revision": "642075f42c027b8a05b7d06f4f132939eb9ed902",
