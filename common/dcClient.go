@@ -1,9 +1,11 @@
 package common
 
 import (
-	"github.com/docker/docker/client"
+	"context"
 	"log"
 	"strings"
+
+	"github.com/docker/docker/client"
 )
 
 var (
@@ -27,6 +29,10 @@ func InitClient(ip string) (*client.Client, error) {
 	}
 
 	if err != nil {
+		return nil, err
+	}
+
+	if _, err = cli.Ping(context.Background()); err != nil {
 		return nil, err
 	}
 	return cli, nil

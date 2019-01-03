@@ -23,16 +23,14 @@ func init() {
 	if len(common.HostIPs) == 0 {
 		panic("at least one host must given")
 	}
-	if runtime.NumCPU() >= 4 {
-		numProces := runtime.NumCPU() / 2
-		runtime.GOMAXPROCS(numProces)
-		println("[ monitor ] set max processor to ", numProces)
-	}
+	numProces := runtime.NumCPU()
+	runtime.GOMAXPROCS(numProces)
+	println("[ monitor ] set max processor to ", numProces)
 	flag.StringVar(&port, "port", ":8080", "base image use to create container")
 	flag.Parse()
 }
 
-func main() {
+func initRouter() *gin.Engine {
 	router := gin.Default()
 	router.Use(cors)
 	v1 := router.Group("")
@@ -50,6 +48,11 @@ func main() {
 
 	v1.GET("/dockerd/add/:host", handler.AddDockerhost)
 	v1.GET("/dockerd/remove/:host", handler.StopDockerHostCollect)
+
+	return router
+}
+
+func main() {
 	//for profiling
 	go func() {
 		log.Println(http.ListenAndServe(":8070", nil))
@@ -61,7 +64,7 @@ func main() {
 			log.Println("connect to ", ip, " err :", err)
 			continue
 		}
-		go container.KeepStats(cli, ip)
+		go container.Monitor(cli, ip)
 		container.DockerCliList.Store(ip, cli)
 	}
 	go container.WriteAllHostInfo()
@@ -72,18 +75,29 @@ func main() {
 	} else {
 		port = ":8080"
 	}
-	router.Run(port)
+	if err := initRouter().Run(port); err != nil {
+		panic(err)
+	}
 }
 
 func cors(c *gin.Context) {
+	whiteList := map[string]int{
+		"http://192.168.100.173":     1,
+		"http://www.repchain.net.cn": 2,
+		"http://localhost:8080":      3,
+	}
 	// request method
 	method := c.Request.Method
 	// request header
 	origin := c.Request.Header.Get("Origin")
+	if _, ok := whiteList[origin]; !ok {
+		origin = "null"
+	}
+
 	if origin != "" {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		// allow to access all origin
-		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Origin", origin)
 		//all method that server supports, in case of to many pre-checking
 		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
 		//  header type

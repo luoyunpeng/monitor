@@ -16,165 +16,165 @@ var (
 	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
-//one docker host have only one hostContainerMStack
-type HostContainerMetricStack struct {
+// DockerHost
+type DockerHost struct {
 	sync.RWMutex
-
+	cms []*CMetric
+	//indicate which host this stats belong to
+	ip     string
+	logger *log.Logger
 	// Done close means that this host has been canceled for monitoring
 	Done chan struct{}
-	//indicate which host this stats belong to
-	logger   *log.Logger
-	hostName string
-	cms      []*SingalContainerMetricStack
 }
 
 // NewHostContainerMetricStack initial a HostContainerMetricStack point type
-func NewHostContainerMetricStack(host string, logger *log.Logger) *HostContainerMetricStack {
-	return &HostContainerMetricStack{hostName: host, logger: logger, Done: make(chan struct{})}
+func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
+	return &DockerHost{ip: ip, logger: logger, Done: make(chan struct{})}
 }
 
-func (s *HostContainerMetricStack) Add(newCms *SingalContainerMetricStack) bool {
-	s.Lock()
+func (dh *DockerHost) Add(cm *CMetric) bool {
+	dh.Lock()
 
-	if s.isKnownContainer(newCms.ID) == -1 {
-		s.cms = append(s.cms, newCms)
-		s.Unlock()
+	if dh.isKnownContainer(cm.ID) == -1 {
+		dh.cms = append(dh.cms, cm)
+		dh.Unlock()
 		return true
 	}
-	s.Unlock()
+	dh.Unlock()
 	return false
 }
 
-func (s *HostContainerMetricStack) Remove(id string) {
-	s.Lock()
+func (dh *DockerHost) Remove(id string) {
+	dh.Lock()
 
-	if i := s.isKnownContainer(id); i != -1 {
+	if i := dh.isKnownContainer(id); i != -1 {
 		// set the container metric to invalid for stopping the collector, also remove container metrics stack
-		s.cms[i].isInvalid = true
-		s.cms = append(s.cms[:i], s.cms[i+1:]...)
+		dh.cms[i].isInvalid = true
+		dh.cms = append(dh.cms[:i], dh.cms[i+1:]...)
 	}
-	s.Unlock()
+	dh.Unlock()
 }
 
-func (s *HostContainerMetricStack) StopCollect() {
-	s.Lock()
+func (dh *DockerHost) StopCollect() {
+	dh.Lock()
 
 	//set all containerStack status to invalid, to stop all collecting
-	for _, containerStack := range s.cms {
+	for _, containerStack := range dh.cms {
 		containerStack.isInvalid = true
 	}
+	close(dh.Done)
+	dh.Unlock()
+	dh.logger.Println("stop all container collect")
 
-	close(s.Done)
-	s.logger.Println("stop all container collect")
-	s.Unlock()
+	//StopedDockerd.Store(s.hostName, struct {}{})
 }
 
 //
-func (s *HostContainerMetricStack) isKnownContainer(cid string) int {
-	for i, c := range s.cms {
-		if c.ID == cid || c.ContainerName == cid {
+func (dh *DockerHost) isKnownContainer(cid string) int {
+	for i, cm := range dh.cms {
+		if cm.ID == cid || cm.ContainerName == cid {
 			return i
 		}
 	}
 	return -1
 }
 
-func (s *HostContainerMetricStack) Length() int {
-	s.RLock()
-	cmsLen := len(s.cms)
-	s.RUnlock()
+func (dh *DockerHost) Length() int {
+	dh.RLock()
+	cmsLen := len(dh.cms)
+	dh.RUnlock()
 
 	return cmsLen
 }
 
-func (s *HostContainerMetricStack) AllNames() []string {
-	s.RLock()
+func (dh *DockerHost) AllNames() []string {
+	dh.RLock()
 
 	var names []string
-	for _, cm := range s.cms {
+	for _, cm := range dh.cms {
 		names = append(names, cm.ContainerName)
 	}
-	s.RUnlock()
+	dh.RUnlock()
 
 	return names
 }
 
-func (s *HostContainerMetricStack) GetAllLastMemory() float64 {
-	s.RLock()
+func (dh *DockerHost) GetAllLastMemory() float64 {
+	dh.RLock()
 
 	var totalMem float64
-	for _, cm := range s.cms {
+	for _, cm := range dh.cms {
 		totalMem += cm.GetLatestMemory()
 	}
-	s.RUnlock()
+	dh.RUnlock()
 
 	return totalMem
 }
 
-type SingalContainerMetricStack struct {
-	mu sync.RWMutex
+type CMetric struct {
+	sync.RWMutex
 
 	ID              string
 	ContainerName   string
-	ReadAbleMetrics []ParsedConatinerMetrics
+	ReadAbleMetrics []ParsedConatinerMetric
 
 	isInvalid      bool
 	isFirstCollect bool
 }
 
 // NewContainerMStack initial a NewContainerMStack point type
-func NewContainerMStack(ContainerName, id string) *SingalContainerMetricStack {
-	return &SingalContainerMetricStack{
+func NewCMetric(ContainerName, id string) *CMetric {
+	return &CMetric{
 		ContainerName:   ContainerName,
 		ID:              id,
-		ReadAbleMetrics: make([]ParsedConatinerMetrics, 0, defaultReadLength),
+		ReadAbleMetrics: make([]ParsedConatinerMetric, 0, defaultReadLength),
 		isFirstCollect:  true,
 	}
 }
 
-func (cms *SingalContainerMetricStack) Put(cfm ParsedConatinerMetrics) bool {
-	cms.mu.Lock()
+func (cm *CMetric) Put(rdMetric ParsedConatinerMetric) bool {
+	cm.Lock()
 
-	if len(cms.ReadAbleMetrics) == defaultReadLength {
+	if len(cm.ReadAbleMetrics) == defaultReadLength {
 		//delete the first one also the oldest one, and append the latest one
-		copy(cms.ReadAbleMetrics, cms.ReadAbleMetrics[1:])
-		cms.ReadAbleMetrics[defaultReadLength-1] = cfm
-		cms.mu.Unlock()
+		copy(cm.ReadAbleMetrics, cm.ReadAbleMetrics[1:])
+		cm.ReadAbleMetrics[defaultReadLength-1] = rdMetric
+		cm.Unlock()
 		return true
 	}
-	cms.ReadAbleMetrics = append(cms.ReadAbleMetrics, cfm)
-	cms.mu.Unlock()
+	cm.ReadAbleMetrics = append(cm.ReadAbleMetrics, rdMetric)
+	cm.Unlock()
 	return true
 }
 
-func (cms *SingalContainerMetricStack) Read(num int) []ParsedConatinerMetrics {
-	cms.mu.RLock()
+func (cm *CMetric) Read(num int) []ParsedConatinerMetric {
+	cm.RLock()
 
-	if len(cms.ReadAbleMetrics) == 0 {
-		cms.mu.RUnlock()
+	if len(cm.ReadAbleMetrics) == 0 {
+		cm.RUnlock()
 		return nil
 	}
-	var rdMetrics []ParsedConatinerMetrics
-	if len(cms.ReadAbleMetrics) >= num {
-		rdMetrics = cms.ReadAbleMetrics[:num]
-		cms.mu.RUnlock()
+	var rdMetrics []ParsedConatinerMetric
+	if len(cm.ReadAbleMetrics) >= num {
+		rdMetrics = cm.ReadAbleMetrics[:num]
+		cm.RUnlock()
 		return rdMetrics
 	}
 
-	rdMetrics = cms.ReadAbleMetrics[:len(cms.ReadAbleMetrics)]
-	cms.mu.RUnlock()
+	rdMetrics = cm.ReadAbleMetrics[:len(cm.ReadAbleMetrics)]
+	cm.RUnlock()
 	return rdMetrics
 }
 
-func (cms *SingalContainerMetricStack) GetLatestMemory() float64 {
-	cms.mu.RLock()
-	latestMem := cms.ReadAbleMetrics[len(cms.ReadAbleMetrics)-1].Memory
-	cms.mu.RUnlock()
+func (cm *CMetric) GetLatestMemory() float64 {
+	cm.RLock()
+	latestMem := cm.ReadAbleMetrics[len(cm.ReadAbleMetrics)-1].Memory
+	cm.RUnlock()
 
 	return latestMem
 }
 
-type ParsedConatinerMetrics struct {
+type ParsedConatinerMetric struct {
 	CPUPercentage    float64
 	Memory           float64
 	MemoryLimit      float64

@@ -277,13 +277,8 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-	_, errPing := cli.Ping(context.Background())
-	if errPing != nil {
-		ctx.JSONP(http.StatusNotFound, errPing.Error())
-		return
-	}
 
-	go container.KeepStats(cli, host)
+	go container.Monitor(cli, host)
 	container.DockerCliList.Store(host, cli)
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
@@ -297,8 +292,8 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	}
 
 	if hoststackTmp, ok := container.AllHostList.Load(host); ok {
-		if hoststack, ok := hoststackTmp.(*container.HostContainerMetricStack); ok {
-			hoststack.StopCollect()
+		if dh, ok := hoststackTmp.(*container.DockerHost); ok {
+			dh.StopCollect()
 			time.Sleep(5 * time.Millisecond)
 			if container.GetHostContainerInfo(host) == nil {
 				ctx.JSONP(http.StatusOK, "successfully stopped")
