@@ -277,7 +277,7 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-
+	container.StopedDockerd.Delete(host)
 	go container.Monitor(cli, host)
 	container.DockerCliList.Store(host, cli)
 	ctx.JSONP(http.StatusOK, "successfully add")
@@ -303,6 +303,20 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	}
 
 	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
+}
+
+func DownDockerHostInfo(ctx *gin.Context) {
+	var ips []string
+	container.StopedDockerd.Range(func(key, value interface{}) bool {
+		ip, _ := key.(string)
+		ips = append(ips, ip)
+		return true
+	})
+
+	ctx.JSONP(http.StatusOK, struct {
+		Len int
+		IPS []string
+	}{Len: len(ips),IPS:ips})
 }
 
 var upGrader = websocket.Upgrader{

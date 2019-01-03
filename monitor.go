@@ -48,6 +48,7 @@ func initRouter() *gin.Engine {
 
 	v1.GET("/dockerd/add/:host", handler.AddDockerhost)
 	v1.GET("/dockerd/remove/:host", handler.StopDockerHostCollect)
+	v1.GET("/dockerd/down/",handler.DownDockerHostInfo)
 
 	return router
 }

@@ -26,6 +26,8 @@ var (
 	// Each host use dockerCli to get stats from docker daemon
 	// the dockerCli is stored by DockerCliList
 	DockerCliList sync.Map
+
+	StopedDockerd sync.Map
 )
 
 const (
@@ -324,9 +326,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				return
 			} else if err != nil && err == dockerDaemonErr {
 				dh.logger.Printf("collecting stats from daemon for "+cm.ContainerName+" error occured: %v", err)
-				//if strings.Contains(err.Error(),"Is the docker daemon running?") {
-				//	hcmsStack.cancel()
-				//}
+				dh.StopCollect()
 				return
 			}
 			if err != nil {
