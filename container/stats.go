@@ -26,11 +26,327 @@ var (
 	// Each host use dockerCli to get stats from docker daemon
 	// the dockerCli is stored by DockerCliList
 	DockerCliList sync.Map
+
+	StopedDockerd sync.Map
 )
 
+/*
+type DockerMonitor struct {
+	IP     string
+	Logger *log.Logger
+
+	EventHandler
+
+	AllDoneC       chan struct{}
+	StartedC       chan struct{}
+	DClient        *client.Client
+	ContainerPool []*CMetric
+
+	errC                chan error
+	ErrNoSuchContainer  error
+	ErrDockerServerDown error
+}
+
+func NewDockerMonitor(ip string) (*DockerMonitor, error) {
+	dc, err := common.InitClient(ip)
+	if err != nil {
+		return nil, err
+	}
+
+	logger := initLog(ip)
+	if logger == nil {
+		return nil, errors.New("no logger")
+	}
+
+	return &DockerMonitor{
+		IP:                 ip,
+		Logger:             logger,
+		DClient:            dc,
+		StartedC:           make(chan struct{}),
+		AllDoneC:           make(chan struct{}),
+		errC:               make(chan error, 1),
+		ErrNoSuchContainer: errors.New("no such container"),
+		EventHandler:       InitEventHandler(),
+	}, nil
+}
+
+func (dm *DockerMonitor) Monitor() {
+	dm.Handle("start", func(e events.Message) {
+		dm.Logger.Printf("event handler: received start event: %v", e)
+		cms := NewContainerMetric("", e.ID[:12])
+		if dm.ContainerPool.Add(cms) {
+			dm.Add(1)
+			go dm.Collect(cms)
+		}
+	})
+
+	dm.Handle("die", func(e events.Message) {
+		dm.Logger.Printf("event handler: received die event: %v", e)
+		dm.ContainerStack.Remove(e.ID[:12])
+	})
+
+	eventChan := make(chan events.Message)
+	go dm.Watch(eventChan)
+	go dm.ContainerEvents(eventChan)
+	// wait event listener go-routine started
+	<-dm.StartedC
+
+	// Start a short-lived goroutine to retrieve the initial list of
+	// containers.
+	dm.ContainerList()
+	dm.Wait()
+	dm.Logger.Println("container first collecting Done")
+}
+
+func (dm *DockerMonitor) ContainerEvents(c chan events.Message) {
+	defer func() {
+		close(c)
+		if dm.DockerCli != nil {
+			dm.Logger.Println("close docker-cli and remove it from DockerCliList and host list")
+			AllHostList.Delete(dm.IP)
+			DockerCliList.Delete(dm.IP)
+			dm.DockerCli.Close()
+		}
+	}()
+
+	f := filters.NewArgs()
+	f.Add("type", "container")
+	options := types.EventsOptions{
+		Filters: f,
+	}
+
+	eventq, errq := dm.DockerCli.Events(monitor.Ctx, options)
+
+	// Whether we successfully subscribed to eventq or not, we can now
+	// unblock the main goroutine.
+	close(dm.Started)
+
+	// wait for events happens
+	for {
+		select {
+		case event := <-eventq:
+			c <- event
+		case err := <-errq:
+			dm.Logger.Printf("host: err happen when listen docker event: %v", err)
+			dm.Cancel()
+			return
+		case <-dm.Ctx.Done():
+			dm.Logger.Printf("connect to docker daemon time out, stop container event listener")
+			return
+		}
+	}
+}
+
+func (dm *DockerMonitor) ContainerList() {
+	options := types.ContainerListOptions{
+		All: false,
+	}
+	cs, err := dm.DClient.ContainerList(monitor.Ctx, options)
+	if err != nil {
+		dm.Logger.Printf("err happen when get all running container: %v", err)
+		return
+	}
+	for _, container := range cs {
+		cms := NewContainerMStack("", container.ID[:12])
+		if dm.ContainerPool.Add(cms) {
+			dm.Add(1)
+			go dm.Collect(cms)
+		}
+	}
+}
+
+func (dm *DockerMonitor) Collect(cms *CMetric) {
+	var (
+		lastNetworkTX, lastNetworkRX  float64
+		lastBlockRead, lastBlockWrite float64
+		cfm                           ParsedConatinerMetrics
+
+		statsJSON              types.StatsJSON
+		previousCPU            uint64
+		previousSystem         uint64
+		memPercent, cpuPercent float64
+		blkRead, blkWrite      uint64
+		mem, memLimit          float64
+		pidsStatsCurrent       uint64
+		timeFormat             [16]byte
+		timeFormatSlice        = timeFormat[:0]
+	)
+
+	defer func() {
+		// if error happens and we get nothing of stats, release wait group whatever
+		if cms.isFirstCollect {
+			cms.isFirstCollect = false
+			dm.Done()
+		}
+	}()
+
+	for {
+		select {
+		case <-dm.AllDoneC:
+			dm.Logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
+			return
+		default:
+			var ()
+
+			response, err := dm.DClient.ContainerStats(monitor.Ctx, cms.ID, false)
+			// bool value initial value is false
+			if cms.isInvalid {
+				if response.Body != nil {
+					errBodyClose := response.Body.Close()
+					if errBodyClose != nil {
+						dm.Logger.Printf("close container stats api response body err happen: %v", err)
+					}
+				}
+				//container stop or rm event happened or others(event that lead to stop the container), return collecting goroutine
+				dm.errC <- dm.ErrNoSuchContainer
+				return
+			}
+			if err != nil {
+				dm.ErrDockerServerDown = err
+				dm.errC <- dm.ErrDockerServerDown
+				return
+			}
+
+			respByte, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				dm.Logger.Printf("ioutil read from response body  for "+cms.ContainerName+" err occured: %v", err)
+				dm.errC <- err
+				if err == io.EOF {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
+			errUnmarshal := json.Unmarshal(respByte, &statsJSON)
+			if errUnmarshal != nil {
+				dm.Logger.Printf("Unmarshal collecting stats for "+cms.ContainerName+" err occured: %v", errUnmarshal)
+				dm.errC <- errUnmarshal
+				if errUnmarshal == io.EOF {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
+			previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
+			previousSystem = statsJSON.PreCPUStats.SystemUsage
+			cpuPercent = CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
+			blkRead, blkWrite = CalculateBlockIO(statsJSON.BlkioStats)
+			// default mem related metric unit is MB
+			mem = CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
+			memLimit = Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
+			memPercent = CalculateMemPercentUnixNoCache(memLimit, mem)
+			pidsStatsCurrent = statsJSON.PidsStats.Current
+			netRx, netTx := CalculateNetwork(statsJSON.Networks)
+
+			if cms.ContainerName == "" {
+				cms.ContainerName = statsJSON.Name[1:]
+			}
+			cfm.CPUPercentage = cpuPercent
+			cfm.Memory = mem
+			cfm.MemoryPercentage = memPercent
+			cfm.MemoryLimit = memLimit
+			if cms.isFirstCollect {
+				lastNetworkRX, cfm.NetworkRx = netRx, 0
+				lastNetworkTX, cfm.NetworkTx = netTx, 0
+			} else {
+				lastNetworkRX, cfm.NetworkRx = netRx, Round(netRx-lastNetworkRX, 3)
+				lastNetworkTX, cfm.NetworkTx = netTx, Round(netTx-lastNetworkTX, 3)
+			}
+
+			if cms.isFirstCollect {
+				lastBlockRead, cfm.BlockRead = Round(float64(blkRead)/(1024*1024), 3), 0
+				lastBlockWrite, cfm.BlockWrite = Round(float64(blkWrite)/(1024*1024), 3), 0
+			} else {
+				tmpRead := Round(float64(blkRead)/(1024*1024), 3)
+				tmpWrite := Round(float64(blkWrite)/(1024*1024), 3)
+				lastBlockRead, cfm.BlockRead = tmpRead, Round(float64(blkRead)/(1024*1024)-lastBlockRead, 3)
+				lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite)/(1024*1024)-lastBlockWrite, 3)
+			}
+			cfm.PidsCurrent = pidsStatsCurrent
+			statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
+			cfm.ReadTime = string(timeFormat[:8])
+			cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if need add 8 hours
+			cms.Put(cfm)
+			dm.errC<- nil
+			errBodyClose := response.Body.Close()
+			if errBodyClose != nil {
+				dm.Logger.Printf("close container stats api response body err happen: %v", err)
+			}
+			dm.Logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+			WriteMetricToInfluxDB(dm.IP, cms.ContainerName, cfm)
+			time.Sleep(defaultCollectDuration)
+		}
+	}
+}
+
+func (dm *DockerMonitor) watchCollect(cms *CMetric) {
+	timeoutTimes := 0
+	for {
+		select {
+		case <-time.After(defaultCollectTimeOut):
+			// zero out the values if we have not received an update within
+			// the specified duration.
+			if timeoutTimes == defaultMaxTimeoutTimes {
+				_, err := dm.DClient.Ping(monitor.Ctx)
+				if err != nil {
+					dm.Logger.Printf("time out for collect "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+				}
+				dm.StopCollect()
+				return
+			}
+			// if this is the first stat you get, release WaitGroup
+			if cms.isFirstCollect {
+				cms.isFirstCollect = false
+				dm.Done()
+			}
+			timeoutTimes++
+			dm.Logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
+		case err := <-dm.errC:
+			//EOF error maybe mean docker daemon err
+			if err == io.EOF {
+				break
+			}
+
+			if err == dm.ErrNoSuchContainer {
+				dm.Logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
+				return
+			} else if err != nil && err == dm.ErrDockerServerDown {
+				dm.Logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
+				return
+			}
+			if err != nil {
+				continue
+			}
+			//if err is nil mean collect metrics successfully
+			// if this is the first stat you get, release WaitGroup
+			if cms.isFirstCollect {
+				cms.isFirstCollect = false
+				dm.Done()
+			}
+		case <-dm.AllDoneC:
+			return
+		}
+	}
+}
+
+func (dm *DockerMonitor) StopCollect() {
+	dm.Lock()
+
+	//set all containerStack status to invalid, to stop all collecting
+	for _, containerStack := range dm.ContainerPool {
+		containerStack.isInvalid = true
+	}
+
+	close(dm.AllDoneC)
+	dm.Logger.Println("stop all container collect")
+	dm.Unlock()
+}
+*/
 const (
 	defaultReadLength      = 15
-	defaultCollectDuration = 60 * time.Second
+	defaultCollectDuration = 58 * time.Second
 	defaultCollectTimeOut  = defaultCollectDuration + 10*time.Second
 	defaultMaxTimeoutTimes = 5
 )
@@ -47,15 +363,15 @@ func initLog(ip string) *log.Logger {
 }
 
 // KeepStats keeps monitor all container of the given host
-func KeepStats(dockerCli *client.Client, ip string) {
+func Monitor(dockerCli *client.Client, ip string) {
 	ctx := context.Background()
 	logger := initLog(ip)
 	if logger == nil {
 		return
 	}
 
-	hcmsStack := NewHostContainerMetricStack(ip, logger)
-	AllHostList.Store(ip, hcmsStack)
+	dh := NewDockerHost(ip, logger)
+	AllHostList.Store(ip, dh)
 
 	// monitorContainerEvents watches for container creation and removal (only
 	// used when calling `docker stats` without arguments).
@@ -89,9 +405,9 @@ func KeepStats(dockerCli *client.Client, ip string) {
 				c <- event
 			case err := <-errq:
 				logger.Printf("host: err happen when listen docker event: %v", err)
-				hcmsStack.StopCollect()
+				dh.StopCollect()
 				return
-			case <-hcmsStack.Done:
+			case <-dh.Done:
 				//logger.Printf("connect to docker daemon error or stop collect by call method, stop container event listener")
 				return
 			}
@@ -114,10 +430,10 @@ func KeepStats(dockerCli *client.Client, ip string) {
 			return
 		}
 		for _, container := range cs {
-			cms := NewContainerMStack("", container.ID[:12])
-			if hcmsStack.Add(cms) {
+			cms := NewCMetric("", container.ID[:12])
+			if dh.Add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, cms, dockerCli, waitFirst, hcmsStack)
+				go collect(ctx, cms, dockerCli, waitFirst, dh)
 			}
 		}
 	}
@@ -130,16 +446,16 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	eh := InitEventHandler()
 	eh.Handle("start", func(e events.Message) {
 		logger.Printf("event handler: received start event: %v", e)
-		cms := NewContainerMStack("", e.ID[:12])
-		if hcmsStack.Add(cms) {
+		cms := NewCMetric("", e.ID[:12])
+		if dh.Add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, cms, dockerCli, waitFirst, hcmsStack)
+			go collect(ctx, cms, dockerCli, waitFirst, dh)
 		}
 	})
 
 	eh.Handle("die", func(e events.Message) {
 		logger.Printf("event handler: received die event: %v", e)
-		hcmsStack.Remove(e.ID[:12])
+		dh.Remove(e.ID[:12])
 		status, err := common.QueryContainerStatus(e.ID)
 		if err != nil {
 			logger.Printf("query container-%s status error %v", e.ID[:12], err)
@@ -172,12 +488,12 @@ func KeepStats(dockerCli *client.Client, ip string) {
 	logger.Println("container first collecting Done")
 }
 
-func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.Client, waitFirst *sync.WaitGroup, hcmsStack *HostContainerMetricStack) {
+func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sync.WaitGroup, dh *DockerHost) {
 	var (
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
 		lastBlockRead, lastBlockWrite float64
-		cfm                           ParsedConatinerMetrics
+		cfm                           ParsedConatinerMetric
 		u                             = make(chan error, 1)
 		errNoSuchC                    = errors.New("no such container")
 		dockerDaemonErr               error
@@ -203,17 +519,17 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 		for {
 			select {
-			case <-hcmsStack.Done:
+			case <-dh.Done:
 				//logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
-				if cms.isInvalid {
+				if cm.isInvalid {
 					//container stop or rm event happened or others(event that lead to stop the container), return collect goroutine
 					u <- errNoSuchC
 					return
 				}
 
-				response, err := cli.ContainerStats(ctx, cms.ID, false)
+				response, err := cli.ContainerStats(ctx, cm.ID, false)
 				if err != nil {
 					dockerDaemonErr = err
 					u <- dockerDaemonErr
@@ -222,7 +538,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				respByte, err := ioutil.ReadAll(response.Body)
 				if err != nil {
-					hcmsStack.logger.Printf("ioutil read from response body for %s err occured: %v", cms.ContainerName, err)
+					dh.logger.Printf("ioutil read from response body for %s err occured: %v", cm.ContainerName, err)
 					u <- err
 					if err == io.EOF {
 						break
@@ -233,7 +549,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 
 				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
 				if errUnmarshal != nil {
-					hcmsStack.logger.Printf("Unmarshal collecting stats for %s err occured: %v", cms.ContainerName, errUnmarshal)
+					dh.logger.Printf("Unmarshal collecting stats for %s err occured: %v", cm.ContainerName, errUnmarshal)
 					u <- errUnmarshal
 					if errUnmarshal == io.EOF {
 						break
@@ -253,8 +569,8 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				cfm.PidsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := CalculateNetwork(statsJSON.Networks)
 
-				if cms.ContainerName == "" {
-					cms.ContainerName = statsJSON.Name[1:]
+				if cm.ContainerName == "" {
+					cm.ContainerName = statsJSON.Name[1:]
 				}
 				if isFirstCollect {
 					//network io
@@ -278,12 +594,12 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
 				cfm.ReadTime = string(timeFormat[:8])
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if necessary add 8 hours
-				cms.Put(cfm)
+				cm.Put(cfm)
 				u <- nil
 				response.Body.Close()
-				if !cms.isInvalid {
-					hcmsStack.logger.Println(cms.ID, cms.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-					WriteMetricToInfluxDB(hcmsStack.hostName, cms.ContainerName, cfm)
+				if !cm.isInvalid {
+					dh.logger.Println(cm.ID, cm.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+					WriteMetricToInfluxDB(dh.ip, cm.ContainerName, cfm)
 				}
 				time.Sleep(defaultCollectDuration)
 			}
@@ -300,9 +616,9 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 			if timeoutTimes == defaultMaxTimeoutTimes {
 				_, err := cli.Ping(ctx)
 				if err != nil {
-					hcmsStack.logger.Printf("time out for collecting "+cms.ContainerName+" reach the top times, err of Ping is: %v", err)
+					dh.logger.Printf("time out for collecting "+cm.ContainerName+" reach the top times, err of Ping is: %v", err)
 				}
-				hcmsStack.StopCollect()
+				dh.StopCollect()
 				return
 			}
 			// if this is the first stat you get, release WaitGroup
@@ -311,7 +627,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				waitFirst.Done()
 			}
 			timeoutTimes++
-			hcmsStack.logger.Println("collect for container-"+cms.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
+			dh.logger.Println("collect for container-"+cm.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
 		case err := <-u:
 			t.Stop()
 			//EOF error maybe mean docker daemon err
@@ -323,7 +639,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				//hcmsStack.logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 				return
 			} else if err != nil && err == dockerDaemonErr {
-				hcmsStack.logger.Printf("collecting stats from daemon for "+cms.ContainerName+" error occured: %v", err)
+				dh.logger.Printf("collecting stats from daemon for "+cm.ContainerName+" error occured: %v", err)
 				//if strings.Contains(err.Error(),"Is the docker daemon running?") {
 				//	hcmsStack.cancel()
 				//}
@@ -338,7 +654,7 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 				isFirstCollect = false
 				waitFirst.Done()
 			}
-		case <-hcmsStack.Done:
+		case <-dh.Done:
 			t.Stop()
 			return
 		}
@@ -346,10 +662,10 @@ func collect(ctx context.Context, cms *SingalContainerMetricStack, cli *client.C
 }
 
 // GetContainerMetrics return container stats
-func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
+func GetContainerMetrics(host, id string) ([]ParsedConatinerMetric, error) {
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
-		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
-			for _, containerStack := range hoststack.cms {
+		if dh, ok := hoststackTmp.(*DockerHost); ok {
+			for _, containerStack := range dh.cms {
 				if containerStack.ID == id || (len(id) >= 12 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
 					return containerStack.Read(defaultReadLength), nil
 				}
@@ -362,11 +678,11 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetrics, error) {
 }
 
 // GetHostContainerInfo return Host's container info
-func GetHostContainerInfo(host string) []string {
-	if hoststackTmp, ok := AllHostList.Load(host); ok {
-		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
-			if hoststack.hostName == host {
-				return hoststack.AllNames()
+func GetHostContainerInfo(ip string) []string {
+	if hoststackTmp, ok := AllHostList.Load(ip); ok {
+		if dh, ok := hoststackTmp.(*DockerHost); ok {
+			if dh.ip == ip {
+				return dh.AllNames()
 			}
 		}
 	}
@@ -375,7 +691,7 @@ func GetHostContainerInfo(host string) []string {
 }
 
 // WriteMetricToInfluxDB write docker container metric to influxDB
-func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedConatinerMetrics) {
+func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedConatinerMetric) {
 	fields := make(map[string]interface{})
 	measurement := "container"
 	fieldKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
@@ -436,9 +752,9 @@ func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log
 	fields["kernelVersion"] = info.KernelVersion
 	fields["os"] = info.OS
 	if hoststackTmp, ok := AllHostList.Load(host); ok {
-		if hoststack, ok := hoststackTmp.(*HostContainerMetricStack); ok {
-			if hoststack.hostName == host {
-				fields["ContainerMemUsedPercentage"] = Round(hoststack.GetAllLastMemory()*100/float64(info.TotalMem/(1024*1024)), 2)
+		if dh, ok := hoststackTmp.(*DockerHost); ok {
+			if dh.ip == host {
+				fields["ContainerMemUsedPercentage"] = Round(dh.GetAllLastMemory()*100/float64(info.TotalMem/(1024*1024)), 2)
 			}
 		}
 	}
@@ -466,10 +782,12 @@ func WriteAllHostInfo() {
 	}
 	logger := initLog("all-host")
 
-	ticker := time.Tick(defaultCollectDuration * 5)
+	ticker := time.NewTicker(defaultCollectDuration * 5)
+	defer ticker.Stop()
+
 	go common.Write()
 
-	for range ticker {
+	for range ticker.C {
 		runningDockerHost = 0
 		totalContainer = 0
 		totalRunningContainer = 0
