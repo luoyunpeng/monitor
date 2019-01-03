@@ -27,7 +27,7 @@ type DockerHost struct {
 	Done chan struct{}
 }
 
-// NewHostContainerMetricStack initial a HostContainerMetricStack point type
+// NewContainerHost
 func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
 	return &DockerHost{ip: ip, logger: logger, Done: make(chan struct{})}
 }
@@ -65,8 +65,7 @@ func (dh *DockerHost) StopCollect() {
 	close(dh.Done)
 	dh.Unlock()
 	dh.logger.Println("stop all container collect")
-
-	//StopedDockerd.Store(s.hostName, struct {}{})
+	StopedDockerd.Store(dh.ip, struct {}{})
 }
 
 //
