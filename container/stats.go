@@ -27,7 +27,7 @@ var (
 	// the dockerCli is stored by DockerCliList
 	DockerCliList sync.Map
 
-	StopedDockerd sync.Map
+	StoppedDocker sync.Map
 )
 
 const (

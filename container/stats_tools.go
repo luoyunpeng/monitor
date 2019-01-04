@@ -65,7 +65,7 @@ func (dh *DockerHost) StopCollect() {
 	close(dh.Done)
 	dh.Unlock()
 	dh.logger.Println("stop all container collect")
-	StopedDockerd.Store(dh.ip, struct {}{})
+	StoppedDocker.Store(dh.ip, struct{}{})
 }
 
 //
