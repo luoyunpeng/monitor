@@ -63,9 +63,9 @@ func (dh *DockerHost) StopCollect() {
 		containerStack.isInvalid = true
 	}
 	close(dh.Done)
+	dh.Unlock()
 	dh.logger.Println("stop all container collect")
 	StoppedDocker.Store(dh.ip, struct{}{})
-	dh.Unlock()
 }
 
 //
