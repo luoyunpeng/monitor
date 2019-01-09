@@ -24,7 +24,8 @@ type DockerHost struct {
 	ip     string
 	logger *log.Logger
 	// Done close means that this host has been canceled for monitoring
-	Done chan struct{}
+	Done   chan struct{}
+	Closed bool
 }
 
 // NewContainerHost
@@ -57,15 +58,17 @@ func (dh *DockerHost) Remove(id string) {
 
 func (dh *DockerHost) StopCollect() {
 	dh.Lock()
-
-	//set all containerStack status to invalid, to stop all collecting
-	for _, containerStack := range dh.cms {
-		containerStack.isInvalid = true
+	if !dh.Closed {
+		//set all containerStack status to invalid, to stop all collecting
+		for _, containerStack := range dh.cms {
+			containerStack.isInvalid = true
+		}
+		close(dh.Done)
+		dh.Closed = true
+		dh.logger.Println("stop all container collect")
+		StoppedDocker.Store(dh.ip, struct{}{})
 	}
-	close(dh.Done)
 	dh.Unlock()
-	dh.logger.Println("stop all container collect")
-	StoppedDocker.Store(dh.ip, struct{}{})
 }
 
 //
