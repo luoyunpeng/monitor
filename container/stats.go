@@ -303,9 +303,10 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				_, err := cli.Ping(ctx)
 				if err != nil {
 					dh.logger.Printf("time out for collecting "+cm.ContainerName+" reach the top times, err of Ping is: %v", err)
+					dh.StopCollect()
+					return
 				}
-				dh.StopCollect()
-				return
+				continue
 			}
 			// if this is the first stat you get, release WaitGroup
 			if isFirstCollect {
