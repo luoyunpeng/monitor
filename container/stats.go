@@ -306,6 +306,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 					dh.StopCollect()
 					return
 				}
+				timeoutTimes = 0
 				continue
 			}
 			// if this is the first stat you get, release WaitGroup
