@@ -25,7 +25,6 @@ var (
 	AllHostList sync.Map
 	// Each host use dockerCli to get stats from docker daemon
 	// the dockerCli is stored by DockerCliList
-	DockerCliList sync.Map
 
 	StoppedDocker sync.Map
 )
@@ -57,6 +56,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 	}
 
 	dh := NewDockerHost(ip, logger)
+	dh.Cli = dockerCli
 	AllHostList.Store(ip, dh)
 
 	// monitorContainerEvents watches for container creation and removal (only
@@ -67,7 +67,6 @@ func Monitor(dockerCli *client.Client, ip string) {
 			if dockerCli != nil {
 				logger.Println("close docker-cli and remove it from DockerCliList and host list")
 				AllHostList.Delete(ip)
-				DockerCliList.Delete(ip)
 				dockerCli.Close()
 			}
 		}()
@@ -93,7 +92,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 				logger.Printf("host: err happen when listen docker event: %v", err)
 				dh.StopCollect()
 				return
-			case <-dh.Done:
+			case <-dh.done:
 				//logger.Printf("connect to docker daemon error or stop collect by call method, stop container event listener")
 				return
 			}
@@ -205,7 +204,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 
 		for {
 			select {
-			case <-dh.Done:
+			case <-dh.done:
 				//logger.Printf("collector for  %s  from docker daemon canceled, return", cms.ContainerName)
 				return
 			default:
@@ -340,7 +339,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				isFirstCollect = false
 				waitFirst.Done()
 			}
-		case <-dh.Done:
+		case <-dh.done:
 			t.Stop()
 			return
 		}
@@ -477,14 +476,13 @@ func WriteAllHostInfo() {
 		runningDockerHost = 0
 		totalContainer = 0
 		totalRunningContainer = 0
-		DockerCliList.Range(func(key, cliTmp interface{}) bool {
+		AllHostList.Range(func(key, value interface{}) bool {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
-			if cli, ok := cliTmp.(*client.Client); ok {
-				ip, _ := key.(string)
-				info, infoErr = cli.Info(ctx)
+			if dh, ok := value.(*DockerHost); ok {
+				info, infoErr = dh.Cli.Info(ctx)
 				if infoErr != nil {
-					logger.Printf(ip+" get docker info error occured: %v", infoErr)
+					logger.Printf(dh.ip+" get docker info error occured: %v", infoErr)
 					return true
 				}
 				runningDockerHost++
@@ -501,7 +499,7 @@ func WriteAllHostInfo() {
 				hostInfo.TotalStoppedContainer = hostInfo.TotalContainer - hostInfo.TotalRunningContainer
 				totalContainer += info.Containers
 				totalRunningContainer += info.ContainersRunning
-				WriteDockerHostInfoToInfluxDB(ip, hostInfo, logger)
+				WriteDockerHostInfoToInfluxDB(dh.ip, hostInfo, logger)
 			}
 
 			return true

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/json-iterator/go"
 	"github.com/luoyunpeng/monitor/common"
 )
@@ -23,14 +24,15 @@ type DockerHost struct {
 	//indicate which host this stats belong to
 	ip     string
 	logger *log.Logger
+	Cli    *client.Client
 	// Done close means that this host has been canceled for monitoring
-	Done   chan struct{}
-	Closed bool
+	done   chan struct{}
+	closed bool
 }
 
 // NewContainerHost
 func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
-	return &DockerHost{ip: ip, logger: logger, Done: make(chan struct{})}
+	return &DockerHost{ip: ip, logger: logger, done: make(chan struct{})}
 }
 
 func (dh *DockerHost) Add(cm *CMetric) bool {
@@ -58,20 +60,19 @@ func (dh *DockerHost) Remove(id string) {
 
 func (dh *DockerHost) StopCollect() {
 	dh.Lock()
-	if !dh.Closed {
+	if !dh.closed {
 		//set all containerStack status to invalid, to stop all collecting
 		for _, containerStack := range dh.cms {
 			containerStack.isInvalid = true
 		}
-		close(dh.Done)
-		dh.Closed = true
+		close(dh.done)
+		dh.closed = true
 		dh.logger.Println("stop all container collect")
 		StoppedDocker.Store(dh.ip, struct{}{})
 	}
 	dh.Unlock()
 }
 
-//
 func (dh *DockerHost) isKnownContainer(cid string) int {
 	for i, cm := range dh.cms {
 		if cm.ID == cid || cm.ContainerName == cid {
@@ -87,6 +88,14 @@ func (dh *DockerHost) Length() int {
 	dh.RUnlock()
 
 	return cmsLen
+}
+
+func (dh *DockerHost) IsValid() bool {
+	dh.RLock()
+	valid := !dh.closed
+	dh.RUnlock()
+
+	return valid
 }
 
 func (dh *DockerHost) AllNames() []string {
@@ -124,7 +133,7 @@ type CMetric struct {
 	isFirstCollect bool
 }
 
-// NewContainerMStack initial a NewContainerMStack point type
+// NewCMStack initial a NMStack point type
 func NewCMetric(ContainerName, id string) *CMetric {
 	return &CMetric{
 		ContainerName:   ContainerName,
