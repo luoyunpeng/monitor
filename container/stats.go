@@ -479,7 +479,7 @@ func WriteAllHostInfo() {
 		AllHostList.Range(func(key, value interface{}) bool {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
-			if dh, ok := value.(*DockerHost); ok {
+			if dh, ok := value.(*DockerHost); ok && dh.IsValid() {
 				info, infoErr = dh.Cli.Info(ctx)
 				if infoErr != nil {
 					logger.Printf(dh.ip+" get docker info error occured: %v", infoErr)
