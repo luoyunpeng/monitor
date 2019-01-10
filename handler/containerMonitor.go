@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/common"
@@ -279,7 +278,6 @@ func AddDockerhost(ctx *gin.Context) {
 	}
 	container.StoppedDocker.Delete(host)
 	go container.Monitor(cli, host)
-	container.DockerCliList.Store(host, cli)
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
@@ -363,41 +361,40 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	if cliTmp, isLoaded := container.DockerCliList.Load(hostName); isLoaded {
-		if cli, ok := cliTmp.(*client.Client); ok {
-			logBody, err := cli.ContainerLogs(context.Background(), id, logOptions)
-			if err != nil {
-				err = ws.WriteMessage(1, []byte(err.Error()))
-				return
-			}
-			defer logBody.Close()
+	value, isLoaded := container.AllHostList.Load(hostName)
+	if dh, ok := value.(*container.DockerHost); isLoaded && ok && dh.IsValid() {
+		logBody, err := dh.Cli.ContainerLogs(context.Background(), id, logOptions)
+		if err != nil {
+			err = ws.WriteMessage(1, []byte(err.Error()))
+			return
+		}
+		defer logBody.Close()
 
-			// read message from ws(websocket)
-			go func() {
-				for {
-					if _, _, err := ws.NextReader(); err != nil {
-						break
-					}
-				}
-			}()
-
-			// write container log
-			br := bufio.NewReader(logBody)
+		// read message from ws(websocket)
+		go func() {
 			for {
-				lineBytes, err := br.ReadBytes('\n')
-				if err != nil {
+				if _, _, err := ws.NextReader(); err != nil {
 					break
 				}
-				//
-				err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
-				if err != nil {
-					log.Printf("err occured when write container log to websocket client: %v", err)
-					return
-				}
+			}
+		}()
+
+		// write container log
+		br := bufio.NewReader(logBody)
+		for {
+			lineBytes, err := br.ReadBytes('\n')
+			if err != nil {
+				break
+			}
+			//
+			err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
+			if err != nil {
+				log.Printf("err occured when write container log to websocket client: %v", err)
+				return
 			}
 		}
 	} else {
-		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the host"))
+		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the ip/host"))
 		if errLoad != nil {
 			log.Printf("err occured when write load err log to websocket client: %v", errLoad)
 		}

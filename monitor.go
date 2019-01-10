@@ -48,7 +48,7 @@ func initRouter() *gin.Engine {
 
 	v1.GET("/dockerd/add/:host", handler.AddDockerhost)
 	v1.GET("/dockerd/remove/:host", handler.StopDockerHostCollect)
-	v1.GET("/dockerd/down/",handler.DownDockerHostInfo)
+	v1.GET("/dockerd/down/", handler.DownDockerHostInfo)
 
 	return router
 }
@@ -66,7 +66,6 @@ func main() {
 			continue
 		}
 		go container.Monitor(cli, ip)
-		container.DockerCliList.Store(ip, cli)
 	}
 	go container.WriteAllHostInfo()
 	//default run at :8080
@@ -87,8 +86,6 @@ func cors(c *gin.Context) {
 		"http://www.repchain.net.cn": 2,
 		"http://localhost:8080":      3,
 	}
-	// request method
-	method := c.Request.Method
 	// request header
 	origin := c.Request.Header.Get("Origin")
 	if _, ok := whiteList[origin]; !ok {
@@ -100,7 +97,7 @@ func cors(c *gin.Context) {
 		// allow to access all origin
 		c.Header("Access-Control-Allow-Origin", origin)
 		//all method that server supports, in case of to many pre-checking
-		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
+		c.Header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE,UPDATE")
 		//  header type
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Length, X-CSRF-Token, Token,session,X_Requested_With,Accept, Origin, Host, Connection, Accept-Encoding, Accept-Language,DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Pragma")
 		// allow across origin setting return other sub fields
@@ -110,10 +107,6 @@ func cors(c *gin.Context) {
 		c.Set("content-type", "application/json")                                                                                                                                                              // 设置返回格式是json
 	}
 
-	//allow all OPTIONS method
-	if method == "OPTIONS" {
-		c.JSON(http.StatusOK, "Options Request!")
-	}
 	// handle request
 	c.Next()
 }
