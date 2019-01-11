@@ -84,7 +84,7 @@ func (dh *DockerHost) isKnownContainer(cid string) int {
 
 func (dh *DockerHost) Length() int {
 	dh.RLock()
-	cmsLen := len(dh.cms)
+	cmsLen := cap(dh.cms)
 	dh.RUnlock()
 
 	return cmsLen
