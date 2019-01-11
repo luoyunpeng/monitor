@@ -25,7 +25,7 @@ func init() {
 	}
 	numProces := runtime.NumCPU()
 	runtime.GOMAXPROCS(numProces)
-	println("[ monitor ] set max processor to ", numProces)
+	log.Println("[ monitor ] set max processor to ", numProces)
 	flag.StringVar(&port, "port", ":8080", "base image use to create container")
 	flag.Parse()
 }
@@ -49,6 +49,7 @@ func initRouter() *gin.Engine {
 	v1.GET("/dockerd/add/:host", handler.AddDockerhost)
 	v1.GET("/dockerd/remove/:host", handler.StopDockerHostCollect)
 	v1.GET("/dockerd/down/", handler.DownDockerHostInfo)
+	v1.GET("/container/debug/slicelen/:host", handler.ContainerSliceLen_Debug)
 
 	return router
 }
@@ -86,25 +87,25 @@ func cors(c *gin.Context) {
 		"http://www.repchain.net.cn": 2,
 		"http://localhost:8080":      3,
 	}
+
 	// request header
 	origin := c.Request.Header.Get("Origin")
-	if _, ok := whiteList[origin]; !ok {
-		origin = "null"
-	}
-
-	if origin != "" {
+	if _, ok := whiteList[origin]; ok {
+		log.Println("allow access from origin: ", origin)
 		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		// allow to access all origin
 		c.Header("Access-Control-Allow-Origin", origin)
 		//all method that server supports, in case of to many pre-checking
-		c.Header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE,UPDATE")
+		c.Header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE")
 		//  header type
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Length, X-CSRF-Token, Token,session,X_Requested_With,Accept, Origin, Host, Connection, Accept-Encoding, Accept-Language,DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Pragma")
 		// allow across origin setting return other sub fields
-		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers,Cache-Control,Content-Language,Content-Type,Expires,Last-Modified,Pragma,FooBar") // 跨域关键设置 让浏览器可以解析
-		c.Header("Access-Control-Max-Age", "172800")                                                                                                                                                           // 缓存请求信息 单位为秒
-		c.Header("Access-Control-Allow-Credentials", "false")                                                                                                                                                  //  跨域请求是否需要带cookie信息 默认设置为true
-		c.Set("content-type", "application/json")                                                                                                                                                              // 设置返回格式是json
+		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers,Cache-Control,Content-Language,Content-Type,Expires,Last-Modified,Pragma,FooBar")
+		c.Header("Access-Control-Max-Age", "172800")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Set("content-type", "application/json")
+	} else {
+		log.Println("forbid access from origin: ", origin)
 	}
 
 	// handle request

@@ -317,6 +317,23 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
+func ContainerSliceLen_Debug(ctx *gin.Context) {
+	host := ctx.Params.ByName("host")
+
+	if !container.IsKnownHost(host) {
+		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
+		return
+	}
+
+	if hoststackTmp, ok := container.AllHostList.Load(host); ok {
+		if dh, ok := hoststackTmp.(*container.DockerHost); ok {
+			ctx.JSONP(http.StatusOK, dh.Length())
+			return
+		}
+	}
+	ctx.JSONP(http.StatusNotFound, "stopped host")
+}
+
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
