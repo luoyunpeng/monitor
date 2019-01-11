@@ -317,7 +317,7 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
-func ContainerSliceLen_Debug(ctx *gin.Context) {
+func ContainerSliceCap_Debug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
 	if !container.IsKnownHost(host) {
