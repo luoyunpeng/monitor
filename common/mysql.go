@@ -10,7 +10,7 @@ var (
 	db  *sql.DB
 	err error
 
-	dbHost     = "localhost:3306"
+	dbHost     = "192.168.100.183:3306"
 	dbUser     = "root"
 	dbPassword = "123"
 	dbName     = "blockchain_db"
@@ -76,5 +76,8 @@ func QueryContainerStatus(id string) (int, error) {
 }
 
 func CloseDB() error {
+	if db == nil {
+		return nil
+	}
 	return db.Close()
 }

@@ -102,9 +102,10 @@ func main() {
 
 	//release all
 	stopAllDockerHost()
+	log.Println("closing mysql db")
 	dbCloseErr := common.CloseDB()
 	if dbCloseErr != nil {
-		log.Printf("Close DB: %v", dbCloseErr)
+		log.Printf("Close DB err: %v", dbCloseErr)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -150,7 +151,7 @@ func stopAllDockerHost() {
 	times := 0
 	for len(container.AllStoppedDHIP()) != len(common.HostIPs) {
 		if times >= 2 {
-			return
+			break
 		}
 		container.AllHostList.Range(func(key, value interface{}) bool {
 			if dh, ok := value.(*container.DockerHost); ok && dh.IsValid() {
@@ -160,4 +161,5 @@ func stopAllDockerHost() {
 		})
 		times++
 	}
+	log.Printf("stop all docker host monitoring with %d loop", times)
 }
