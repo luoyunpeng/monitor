@@ -20,12 +20,10 @@ import (
 
 var (
 	// Each container can store at most 15 stats record in individual container stack
-	// Each Host has many container stack, we use hostStack to store the container stacks
-	// AllHostList stores every host's hostStack, the key is host ip address
+	// Each Host has at least one container stack, we use Docker host to store the container stacks
+	// AllHostList stores every host's Docker host, the key is host ip address
 	AllHostList sync.Map
-	// Each host use dockerCli to get stats from docker daemon
-	// the dockerCli is stored by DockerCliList
-
+	// All stopped docker host
 	StoppedDocker sync.Map
 )
 
@@ -529,4 +527,15 @@ func createMetricAndWrite(measurement string, tags map[string]string, fields map
 	m.Fields = fields
 	m.ReadTime = readTime
 	common.MetricChan <- m
+}
+
+func AllStoppedDHIP() []string {
+	var ips []string
+	StoppedDocker.Range(func(key, value interface{}) bool {
+		ip, _ := key.(string)
+		ips = append(ips, ip)
+		return true
+	})
+
+	return ips
 }

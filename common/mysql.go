@@ -10,7 +10,7 @@ var (
 	db  *sql.DB
 	err error
 
-	dbHost     = "host:3306"
+	dbHost     = "192.168.100.183:3306"
 	dbUser     = "root"
 	dbPassword = "123"
 	dbName     = "blockchain_db"
@@ -45,9 +45,6 @@ func ChangeContainerStatus(id, status string) error {
 	}
 	//c_id is the primary key, update will only affect one row in table b_container_service
 	_, err := db.Exec("update "+tableContainer+" set status = ? where c_id = ?", status, id)
-	if err != nil {
-		return err
-	}
 	/*
 		rowUpdate, err := updateRes.RowsAffected()
 		if err != nil {
@@ -56,7 +53,7 @@ func ChangeContainerStatus(id, status string) error {
 		if rowUpdate != 1 {
 			return errors.New(strconv.Itoa(int(rowUpdate)) + " row is update please check")
 		}*/
-	return nil
+	return err
 }
 
 func QueryContainerStatus(id string) (int, error) {
@@ -76,4 +73,8 @@ func QueryContainerStatus(id string) (int, error) {
 	}
 
 	return status, nil
+}
+
+func CloseDB() error {
+	return db.Close()
 }

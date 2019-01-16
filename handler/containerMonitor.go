@@ -304,12 +304,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 }
 
 func DownDockerHostInfo(ctx *gin.Context) {
-	var ips []string
-	container.StoppedDocker.Range(func(key, value interface{}) bool {
-		ip, _ := key.(string)
-		ips = append(ips, ip)
-		return true
-	})
+	ips := container.AllStoppedDHIP()
 
 	ctx.JSONP(http.StatusOK, struct {
 		Len int
