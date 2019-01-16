@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/luoyunpeng/monitor/common"
@@ -76,9 +80,39 @@ func main() {
 	} else {
 		port = ":8080"
 	}
-	if err := initRouter().Run(port); err != nil {
-		panic(err)
+
+	srv := &http.Server{
+		Addr:    port,
+		Handler: initRouter(),
 	}
+
+	go func() {
+		// service connections
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 5 seconds.
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+	log.Println("**** Graceful shutdown monitor server ****")
+
+	//release all
+	stopAllDockerHost()
+	dbCloseErr := common.CloseDB()
+	if dbCloseErr != nil {
+		log.Printf("Close DB: %v", dbCloseErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Monitor Server shutdown:", err)
+	}
+	log.Println("**** Monitor server exiting **** ")
 }
 
 func cors(c *gin.Context) {
@@ -110,4 +144,20 @@ func cors(c *gin.Context) {
 
 	// handle request
 	c.Next()
+}
+
+func stopAllDockerHost() {
+	times := 0
+	for len(container.AllStoppedDHIP()) != len(common.HostIPs) {
+		if times >= 2 {
+			return
+		}
+		container.AllHostList.Range(func(key, value interface{}) bool {
+			if dh, ok := value.(*container.DockerHost); ok && dh.IsValid() {
+				dh.StopCollect()
+			}
+			return true
+		})
+		times++
+	}
 }

@@ -47,11 +47,11 @@ func Write() {
 	defer influCli.Close()
 
 	for m := range MetricChan {
-		interWrite(m)
+		internalWrite(m)
 	}
 }
 
-func interWrite(m Metric) {
+func internalWrite(m Metric) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  myDB,
 		Precision: "s",
