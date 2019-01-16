@@ -76,5 +76,8 @@ func QueryContainerStatus(id string) (int, error) {
 }
 
 func CloseDB() error {
+	if db == nil {
+		return nil
+	}
 	return db.Close()
 }
