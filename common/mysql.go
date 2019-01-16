@@ -10,7 +10,7 @@ var (
 	db  *sql.DB
 	err error
 
-	dbHost     = "192.168.100.183:3306"
+	dbHost     = "localhost:3306"
 	dbUser     = "root"
 	dbPassword = "123"
 	dbName     = "blockchain_db"
