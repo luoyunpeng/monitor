@@ -1,10 +1,10 @@
 package container
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -198,6 +198,9 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 			blkRead, blkWrite uint64
 			timeFormat        [16]byte
 			timeFormatSlice   = timeFormat[:0]
+
+			bufferReader = bufio.NewReaderSize(nil, 1024*3+300)
+			decoder      = json.NewDecoder(bufferReader)
 		)
 
 		for {
@@ -218,27 +221,11 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 					u <- dockerDaemonErr
 					return
 				}
+				bufferReader.Reset(response.Body)
 
-				respByte, err := ioutil.ReadAll(response.Body)
-				if err != nil {
-					dh.logger.Printf("ioutil read from response body for %s err occured: %v", cm.ContainerName, err)
-					u <- err
-					if err == io.EOF {
-						break
-					}
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-
-				errUnmarshal := json.Unmarshal(respByte, &statsJSON)
-				if errUnmarshal != nil {
-					dh.logger.Printf("Unmarshal collecting stats for %s err occured: %v", cm.ContainerName, errUnmarshal)
-					u <- errUnmarshal
-					if errUnmarshal == io.EOF {
-						break
-					}
-					time.Sleep(100 * time.Millisecond)
-					continue
+				errD := decoder.Decode(&statsJSON)
+				if errD != nil {
+					dh.logger.Printf("Decode collecting stats for %s err occured: %v", cm.ContainerName, errD)
 				}
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
