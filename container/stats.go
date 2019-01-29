@@ -199,7 +199,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 			timeFormat        [16]byte
 			timeFormatSlice   = timeFormat[:0]
 
-			bufferReader = bufio.NewReaderSize(nil, 1024*3+300)
+			bufferReader = bufio.NewReaderSize(nil, 512)
 			decoder      = json.NewDecoder(bufferReader)
 		)
 
