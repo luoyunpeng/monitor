@@ -3,9 +3,9 @@ package container
 import (
 	"log"
 	"math"
-	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -223,10 +223,10 @@ func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v types.StatsJS
 func CalculateBlockIO(blkio types.BlkioStats) (uint64, uint64) {
 	var blkRead, blkWrite uint64
 	for _, bioEntry := range blkio.IoServiceBytesRecursive {
-		switch strings.ToLower(bioEntry.Op) {
-		case "read":
+		switch string(bioEntry.Op[0]) {
+		case "r", "R":
 			blkRead = blkRead + bioEntry.Value
-		case "write":
+		case "w", "W":
 			blkWrite = blkWrite + bioEntry.Value
 		}
 	}
@@ -272,4 +272,8 @@ func IsKnownHost(host string) bool {
 	}
 
 	return false
+}
+
+func Bytes2str(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
