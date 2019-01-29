@@ -262,13 +262,13 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite/(1024*1024))-lastBlockWrite, 3)
 				}
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
-				cfm.ReadTime = string(timeFormat[:8])
+				cfm.ReadTime = Bytes2str(timeFormat[:8])
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if necessary add 8 hours
 				cm.Put(cfm)
 				u <- nil
 				response.Body.Close()
 				if !cm.isInvalid {
-					dh.logger.Println(cm.ID, cm.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
+					//dh.logger.Println(cm.ID, cm.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 					WriteMetricToInfluxDB(dh.ip, cm.ContainerName, cfm)
 				}
 				time.Sleep(defaultCollectDuration)
@@ -277,8 +277,8 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 	}()
 
 	timeoutTimes := 0
+	t := time.NewTimer(defaultCollectTimeOut)
 	for {
-		t := time.NewTimer(defaultCollectTimeOut)
 		select {
 		case <-t.C:
 			// zero out the values if we have not received an update within
@@ -288,9 +288,11 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				if err != nil {
 					dh.logger.Printf("time out for collecting "+cm.ContainerName+" reach the top times, err of Ping is: %v", err)
 					dh.StopCollect()
+					t.Stop()
 					return
 				}
 				timeoutTimes = 0
+				t.Reset(defaultCollectTimeOut)
 				continue
 			}
 			// if this is the first stat you get, release WaitGroup
@@ -300,8 +302,8 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 			}
 			timeoutTimes++
 			dh.logger.Println("collect for container-"+cm.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
+			t.Reset(defaultCollectTimeOut)
 		case err := <-u:
-			t.Stop()
 			//EOF error maybe mean docker daemon err
 			if err == io.EOF {
 				break
@@ -309,13 +311,16 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 
 			if err == errNoSuchC {
 				//hcmsStack.logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
+				t.Stop()
 				return
 			} else if err != nil && err == dockerDaemonErr {
 				dh.logger.Printf("collecting stats from daemon for "+cm.ContainerName+" error occured: %v", err)
 				dh.StopCollect()
+				t.Stop()
 				return
 			}
 			if err != nil {
+				t.Reset(defaultCollectTimeOut)
 				continue
 			}
 			//if err is nil mean collect metrics successfully
@@ -324,6 +329,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				isFirstCollect = false
 				waitFirst.Done()
 			}
+			t.Reset(defaultCollectTimeOut)
 		case <-dh.done:
 			t.Stop()
 			return
