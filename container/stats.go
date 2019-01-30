@@ -368,13 +368,13 @@ func GetHostContainerInfo(ip string) []string {
 
 // WriteMetricToInfluxDB write docker container metric to influxDB
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics ParsedConatinerMetric) {
-	fields := make(map[string]interface{})
 	measurement := "container"
 	fieldKeys := []string{"cpu", "mem", "memLimit", "networkTX", "networkRX", "blockRead", "blockWrite"}
-	tags := map[string]string{
-		"host": host,
-		"name": containerName,
-	}
+
+	fields := make(map[string]interface{}, 7)
+	tags := make(map[string]string, 2)
+	tags["host"] = host
+	tags["name"] = containerName
 
 	for _, fKey := range fieldKeys {
 		switch fKey {
@@ -413,7 +413,7 @@ type singalHostInfo struct {
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
 func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log.Logger) {
 	measurement := "dockerHostInfo"
-	fields := make(map[string]interface{})
+	fields := make(map[string]interface{}, 10)
 	tags := map[string]string{
 		"host": host,
 	}
@@ -452,7 +452,7 @@ func WriteAllHostInfo() {
 
 		infoErr error
 	)
-	fields := make(map[string]interface{})
+	fields := make(map[string]interface{}, 6)
 	tags := map[string]string{
 		"ALL": "all",
 	}
