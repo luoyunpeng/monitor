@@ -3,7 +3,6 @@ package handler
 import (
 	"bufio"
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -30,17 +29,17 @@ type RepMetric struct {
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSON(http.StatusNotFound, errInfo)
 		return
 	}
 
 	hstats, err := container.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
-	ctx.JSONP(http.StatusOK, hstats)
+	ctx.JSON(http.StatusOK, hstats)
 }
 
 // ContainerMem handles GET requests on /container/metric/mem/:id?host=<hostName>
@@ -49,8 +48,8 @@ func ContainerStats(ctx *gin.Context) {
 func ContainerMem(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -80,8 +79,8 @@ func ContainerMem(ctx *gin.Context) {
 func ContainerMemPercent(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -112,8 +111,8 @@ func ContainerMemPercent(ctx *gin.Context) {
 func ContainerMemLimit(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -142,8 +141,8 @@ func ContainerMemLimit(ctx *gin.Context) {
 func ContainerCPU(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -174,8 +173,8 @@ func ContainerCPU(ctx *gin.Context) {
 func ContainerNetworkIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -208,8 +207,8 @@ func ContainerNetworkIO(ctx *gin.Context) {
 func ContainerBlockIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam(id, hostName); err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
@@ -245,13 +244,13 @@ func ContainerInfo(ctx *gin.Context) {
 		Names []string
 	}{}
 	hostName := ctx.DefaultQuery("host", "")
-	if err := checkParam("must", hostName); err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+	if errInfo := checkParam("must", hostName); errInfo != "" {
+		ctx.JSON(http.StatusNotFound, errInfo)
 		return
 	}
 	cinfo.Names = container.GetHostContainerInfo(hostName)
 	if cinfo.Names == nil {
-		ctx.JSONP(http.StatusNotFound, "stack got no container metrics")
+		ctx.JSON(http.StatusNotFound, "stack got no container metrics")
 		return
 	}
 	cinfo.Len = len(cinfo.Names)
@@ -365,8 +364,8 @@ func ContainerLogs(ctx *gin.Context) {
 	}
 	defer ws.Close()
 
-	if err := checkParam(id, hostName); err != nil {
-		err = ws.WriteMessage(1, []byte(err.Error()))
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		err = ws.WriteMessage(1, container.Str2bytes(errInfo))
 		if err != nil {
 			log.Printf("err ccured when write check parameter error for access container log: %v", err)
 		}
@@ -441,9 +440,9 @@ func HostMemInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, hostMemInfo)
 }*/
 
-func checkParam(id, hostName string) error {
+func checkParam(id, hostName string) string {
 	if len(id) == 0 || len(hostName) == 0 {
-		return errors.New("container id/name or host must given")
+		return "container id/name or host must given"
 	}
 
 	isHostKnown := false
@@ -454,7 +453,7 @@ func checkParam(id, hostName string) error {
 	}
 
 	if !isHostKnown {
-		return errors.New("nknown host, please try again")
+		return "nknown host, please try again"
 	}
-	return nil
+	return ""
 }
