@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -216,7 +217,10 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 				}
 
 				response, err := cli.ContainerStats(ctx, cm.ID, false)
-				if err != nil {
+				if err != nil && strings.Contains(err.Error(), "No such container") {
+					u <- errNoSuchC
+					return
+				} else if err != nil {
 					dockerDaemonErr = err
 					u <- dockerDaemonErr
 					return
@@ -436,10 +440,6 @@ func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log
 	}
 
 	createMetricAndWrite(measurement, tags, fields, time.Now())
-	logger.Println("write "+host+"  info: ",
-		fields["hostName"], fields["imagesLen"], fields["containerTotal"], fields["containerRunning"],
-		fields["containersStopped"], fields["ncpu"], fields["totalMem"], fields["kernelVersion"],
-		fields["os"], fields["ContainerMemUsedPercentage"])
 }
 
 // Calculate all docker host info and write to influxDB
@@ -473,7 +473,7 @@ func WriteAllHostInfo() {
 			if dh, ok := value.(*DockerHost); ok && dh.IsValid() {
 				info, infoErr = dh.Cli.Info(ctx)
 				if infoErr != nil {
-					logger.Printf(dh.ip+" get docker info error occured: %v", infoErr)
+					logger.Printf("%s get docker info error occured: %v", dh.ip, infoErr)
 					return true
 				}
 				runningDockerHost++
@@ -523,7 +523,7 @@ func createMetricAndWrite(measurement string, tags map[string]string, fields map
 }
 
 func AllStoppedDHIP() []string {
-	var ips []string
+	ips := make([]string, 0, len(common.HostIPs))
 	StoppedDocker.Range(func(key, value interface{}) bool {
 		ip, _ := key.(string)
 		ips = append(ips, ip)
