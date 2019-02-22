@@ -28,7 +28,7 @@ type RepMetric struct {
 // if id (container id or name) and host is not present, response "no such container error"
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
-	hostName := ctx.DefaultQuery("host", "")
+	hostName := ctx.Query("host")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
 		ctx.JSON(http.StatusNotFound, errInfo)
 		return
@@ -59,10 +59,10 @@ func ContainerMem(ctx *gin.Context) {
 		return
 	}
 
-	var cMem []struct {
+	cMem := [container.DefaultReadLength]struct {
 		Mem      float64
 		ReadTime string
-	}
+	}{}[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cMem = append(cMem, struct {
@@ -152,10 +152,10 @@ func ContainerCPU(ctx *gin.Context) {
 		return
 	}
 
-	var cCPU []struct {
+	cCPU := [container.DefaultReadLength]struct {
 		CPU      float64
 		ReadTime string
-	}
+	}{}[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cCPU = append(cCPU, struct {
@@ -184,11 +184,11 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		return
 	}
 
-	var cNetworkIO []struct {
+	cNetworkIO := [container.DefaultReadLength]struct {
 		NetworkTX float64
 		NetworkRX float64
 		ReadTime  string
-	}
+	}{}[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cNetworkIO = append(cNetworkIO, struct {
@@ -218,11 +218,11 @@ func ContainerBlockIO(ctx *gin.Context) {
 		return
 	}
 
-	var cBlockIO []struct {
+	cBlockIO := [container.DefaultReadLength]struct {
 		BlockRead  float64
 		BlockWrite float64
 		ReadTime   string
-	}
+	}{}[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cBlockIO = append(cBlockIO, struct {

@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	defaultReadLength      = 15
+	DefaultReadLength      = 15
 	defaultCollectDuration = 58 * time.Second
 	defaultCollectTimeOut  = defaultCollectDuration + 10*time.Second
 	defaultMaxTimeoutTimes = 5
@@ -218,6 +218,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 
 				response, err := cli.ContainerStats(ctx, cm.ID, false)
 				if err != nil && strings.Contains(err.Error(), "No such container") {
+					log.Printf("container-%s die event happend after calling stats", cm.ID)
 					u <- errNoSuchC
 					return
 				} else if err != nil {
@@ -347,7 +348,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetric, error) {
 		if dh, ok := hoststackTmp.(*DockerHost); ok {
 			for _, containerStack := range dh.cms {
 				if containerStack.ID == id || (len(id) >= 12 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
-					return containerStack.Read(defaultReadLength), nil
+					return containerStack.Read(DefaultReadLength), nil
 				}
 			}
 			return nil, errors.New("given container name or id is unknown, or container is not running")
