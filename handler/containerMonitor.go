@@ -59,10 +59,11 @@ func ContainerMem(ctx *gin.Context) {
 		return
 	}
 
-	cMem := [container.DefaultReadLength]struct {
+	cMemArray := [container.DefaultReadLength]struct {
 		Mem      float64
 		ReadTime string
-	}{}[0:0:container.DefaultReadLength]
+	}{}
+	cMem := cMemArray[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cMem = append(cMem, struct {
@@ -152,10 +153,11 @@ func ContainerCPU(ctx *gin.Context) {
 		return
 	}
 
-	cCPU := [container.DefaultReadLength]struct {
+	cCPUArray := [container.DefaultReadLength]struct {
 		CPU      float64
 		ReadTime string
-	}{}[0:0:container.DefaultReadLength]
+	}{}
+	cCPU := cCPUArray[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cCPU = append(cCPU, struct {
@@ -184,11 +186,12 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		return
 	}
 
-	cNetworkIO := [container.DefaultReadLength]struct {
+	cNetworkIOArray := [container.DefaultReadLength]struct {
 		NetworkTX float64
 		NetworkRX float64
 		ReadTime  string
-	}{}[0:0:container.DefaultReadLength]
+	}{}
+	cNetworkIO := cNetworkIOArray[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cNetworkIO = append(cNetworkIO, struct {
@@ -218,11 +221,12 @@ func ContainerBlockIO(ctx *gin.Context) {
 		return
 	}
 
-	cBlockIO := [container.DefaultReadLength]struct {
+	cBlockIOArray := [container.DefaultReadLength]struct {
 		BlockRead  float64
 		BlockWrite float64
 		ReadTime   string
-	}{}[0:0:container.DefaultReadLength]
+	}{}
+	cBlockIO := cBlockIOArray[0:0:container.DefaultReadLength]
 
 	for _, cm := range csm {
 		cBlockIO = append(cBlockIO, struct {
