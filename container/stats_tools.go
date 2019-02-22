@@ -138,7 +138,7 @@ func NewCMetric(ContainerName, id string) *CMetric {
 	return &CMetric{
 		ContainerName:   ContainerName,
 		ID:              id,
-		ReadAbleMetrics: make([]ParsedConatinerMetric, 0, defaultReadLength),
+		ReadAbleMetrics: make([]ParsedConatinerMetric, 0, DefaultReadLength),
 		isFirstCollect:  true,
 	}
 }
@@ -146,10 +146,10 @@ func NewCMetric(ContainerName, id string) *CMetric {
 func (cm *CMetric) Put(rdMetric ParsedConatinerMetric) bool {
 	cm.Lock()
 
-	if len(cm.ReadAbleMetrics) == defaultReadLength {
+	if len(cm.ReadAbleMetrics) == DefaultReadLength {
 		//delete the first one also the oldest one, and append the latest one
 		copy(cm.ReadAbleMetrics, cm.ReadAbleMetrics[1:])
-		cm.ReadAbleMetrics[defaultReadLength-1] = rdMetric
+		cm.ReadAbleMetrics[DefaultReadLength-1] = rdMetric
 		cm.Unlock()
 		return true
 	}
