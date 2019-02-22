@@ -267,7 +267,7 @@ func collect(ctx context.Context, cm *CMetric, cli *client.Client, waitFirst *sy
 					lastBlockWrite, cfm.BlockWrite = tmpWrite, Round(float64(blkWrite/(1024*1024))-lastBlockWrite, 3)
 				}
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
-				cfm.ReadTime = Bytes2str(timeFormat[:8])
+				cfm.ReadTime = string(timeFormat[:8])
 				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if necessary add 8 hours
 				cm.Put(cfm)
 				u <- nil
