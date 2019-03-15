@@ -223,6 +223,9 @@ func CalculateCPUPercentUnix(previousCPU, previousSystem uint64, v types.StatsJS
 func CalculateBlockIO(blkio types.BlkioStats) (uint64, uint64) {
 	var blkRead, blkWrite uint64
 	for _, bioEntry := range blkio.IoServiceBytesRecursive {
+		if len(bioEntry.Op) == 0 {
+			continue
+		}
 		switch bioEntry.Op[0] {
 		case 'r', 'R':
 			blkRead = blkRead + bioEntry.Value
