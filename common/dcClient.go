@@ -10,7 +10,7 @@ import (
 
 var (
 	hostURL        = "tcp://ip:2375"
-	defaultVersion = "1.37"
+	defaultVersion = "1.38"
 )
 
 //InitClient init a docker client from give ip, default port is 2375

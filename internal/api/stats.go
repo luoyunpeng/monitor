@@ -1,4 +1,4 @@
-package handler
+package api
 
 import (
 	"bufio"
@@ -12,7 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/common"
-	"github.com/luoyunpeng/monitor/container"
+	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/models"
+	"github.com/luoyunpeng/monitor/internal/monitor"
+	"github.com/luoyunpeng/monitor/internal/util"
 )
 
 type RepMetric struct {
@@ -34,7 +37,7 @@ func ContainerStats(ctx *gin.Context) {
 		return
 	}
 
-	hstats, err := container.GetContainerMetrics(hostName, id)
+	hstats, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
@@ -53,17 +56,17 @@ func ContainerMem(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
-	cMemArray := [container.DefaultReadLength]struct {
+	cMemArray := [conf.DefaultReadLength]struct {
 		Mem      float64
 		ReadTime string
 	}{}
-	cMem := cMemArray[0:0:container.DefaultReadLength]
+	cMem := cMemArray[0:0:conf.DefaultReadLength]
 
 	for _, cm := range csm {
 		cMem = append(cMem, struct {
@@ -85,7 +88,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
@@ -99,7 +102,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 
 	if len(csm) >= 1 {
 		cMemPercent.UsedPercentage = csm[len(csm)-1].MemoryPercentage
-		cMemPercent.UnUsePercentage = container.Round(100-cMemPercent.UsedPercentage, 3)
+		cMemPercent.UnUsePercentage = util.Round(100-cMemPercent.UsedPercentage, 3)
 		cMemPercent.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
@@ -117,7 +120,7 @@ func ContainerMemLimit(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
@@ -147,17 +150,17 @@ func ContainerCPU(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
-	cCPUArray := [container.DefaultReadLength]struct {
+	cCPUArray := [conf.DefaultReadLength]struct {
 		CPU      float64
 		ReadTime string
 	}{}
-	cCPU := cCPUArray[0:0:container.DefaultReadLength]
+	cCPU := cCPUArray[0:0:conf.DefaultReadLength]
 
 	for _, cm := range csm {
 		cCPU = append(cCPU, struct {
@@ -180,18 +183,18 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
-	cNetworkIOArray := [container.DefaultReadLength]struct {
+	cNetworkIOArray := [conf.DefaultReadLength]struct {
 		NetworkTX float64
 		NetworkRX float64
 		ReadTime  string
 	}{}
-	cNetworkIO := cNetworkIOArray[0:0:container.DefaultReadLength]
+	cNetworkIO := cNetworkIOArray[0:0:conf.DefaultReadLength]
 
 	for _, cm := range csm {
 		cNetworkIO = append(cNetworkIO, struct {
@@ -215,18 +218,19 @@ func ContainerBlockIO(ctx *gin.Context) {
 		return
 	}
 
-	csm, err := container.GetContainerMetrics(hostName, id)
+	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
-	cBlockIOArray := [container.DefaultReadLength]struct {
+	// can not use a anonymous array to initialize a slice, since anonymous array is unaddressable,
+	cBlockIOArray := [conf.DefaultReadLength]struct {
 		BlockRead  float64
 		BlockWrite float64
 		ReadTime   string
 	}{}
-	cBlockIO := cBlockIOArray[0:0:container.DefaultReadLength]
+	cBlockIO := cBlockIOArray[0:0:conf.DefaultReadLength]
 
 	for _, cm := range csm {
 		cBlockIO = append(cBlockIO, struct {
@@ -252,7 +256,7 @@ func ContainerInfo(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, errInfo)
 		return
 	}
-	cinfo.Names = container.GetHostContainerInfo(hostName)
+	cinfo.Names = models.GetHostContainerInfo(hostName)
 	if cinfo.Names == nil {
 		ctx.JSON(http.StatusNotFound, "stack got no container metrics")
 		return
@@ -265,11 +269,11 @@ func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
 
-	if !container.IsKnownHost(host) {
-		common.HostIPs = append(common.HostIPs, host)
+	if !conf.IsKnownHost(host) {
+		conf.HostIPs = append(conf.HostIPs, host)
 	}
 
-	if _, ok := container.AllHostList.Load(host); ok {
+	if _, ok := models.Cache_AllHostList.Load(host); ok {
 		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
 		return
 	}
@@ -279,24 +283,24 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-	container.StoppedDocker.Delete(host)
-	go container.Monitor(cli, host)
+	models.Cache_StoppedDocker.Delete(host)
+	go monitor.Monitor(cli, host)
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
 func StopDockerHostCollect(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
-	if !container.IsKnownHost(host) {
+	if !conf.IsKnownHost(host) {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
-	if hoststackTmp, ok := container.AllHostList.Load(host); ok {
-		if dh, ok := hoststackTmp.(*container.DockerHost); ok {
+	if hoststackTmp, ok := models.Cache_AllHostList.Load(host); ok {
+		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
 			dh.StopCollect()
 			time.Sleep(1 * time.Millisecond)
-			if container.GetHostContainerInfo(host) == nil {
+			if models.GetHostContainerInfo(host) == nil {
 				ctx.JSONP(http.StatusOK, "successfully stopped")
 				return
 			}
@@ -307,7 +311,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 }
 
 func DownDockerHostInfo(ctx *gin.Context) {
-	ips := container.AllStoppedDHIP()
+	ips := models.AllStoppedDHIP()
 
 	ctx.JSONP(http.StatusOK, struct {
 		Len int
@@ -318,13 +322,13 @@ func DownDockerHostInfo(ctx *gin.Context) {
 func ContainerSliceCap_Debug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
-	if !container.IsKnownHost(host) {
+	if !conf.IsKnownHost(host) {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
-	if hoststackTmp, ok := container.AllHostList.Load(host); ok {
-		if dh, ok := hoststackTmp.(*container.DockerHost); ok {
+	if hoststackTmp, ok := models.Cache_AllHostList.Load(host); ok {
+		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
 			ctx.JSONP(http.StatusOK, dh.Length())
 			return
 		}
@@ -369,15 +373,15 @@ func ContainerLogs(ctx *gin.Context) {
 	defer ws.Close()
 
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		err = ws.WriteMessage(1, container.Str2bytes(errInfo))
+		err = ws.WriteMessage(1, util.Str2bytes(errInfo))
 		if err != nil {
 			log.Printf("err ccured when write check parameter error for access container log: %v", err)
 		}
 		return
 	}
 
-	value, isLoaded := container.AllHostList.Load(hostName)
-	if dh, ok := value.(*container.DockerHost); isLoaded && ok && dh.IsValid() {
+	value, isLoaded := models.Cache_AllHostList.Load(hostName)
+	if dh, ok := value.(*models.DockerHost); isLoaded && ok && dh.IsValid() {
 		logBody, err := dh.Cli.ContainerLogs(context.Background(), id, logOptions)
 		if err != nil {
 			err = ws.WriteMessage(1, []byte(err.Error()))
@@ -450,7 +454,7 @@ func checkParam(id, hostName string) string {
 	}
 
 	isHostKnown := false
-	for _, h := range common.HostIPs {
+	for _, h := range conf.HostIPs {
 		if hostName == h {
 			isHostKnown = true
 		}
