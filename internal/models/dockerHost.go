@@ -1,0 +1,165 @@
+package models
+
+import (
+	"log"
+	"sync"
+	"time"
+
+	"github.com/docker/docker/client"
+	"github.com/luoyunpeng/monitor/internal/conf"
+)
+
+// DockerHost
+type DockerHost struct {
+	sync.RWMutex
+	cStats []*ContainerStats
+	//indicate which host this stats belong to
+	ip     string
+	Logger *log.Logger
+	Cli    *client.Client
+	// Done close means that this host has been canceled for monitoring
+	Done   chan struct{}
+	closed bool
+}
+
+// NewContainerHost
+func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
+	return &DockerHost{ip: ip, Logger: logger, Done: make(chan struct{})}
+}
+
+func (dh *DockerHost) Add(cm *ContainerStats) bool {
+	dh.Lock()
+
+	if dh.isKnownContainer(cm.ID) == -1 {
+		dh.cStats = append(dh.cStats, cm)
+		dh.Unlock()
+		return true
+	}
+	dh.Unlock()
+	return false
+}
+
+func (dh *DockerHost) Remove(id string) {
+	dh.Lock()
+
+	if i := dh.isKnownContainer(id); i != -1 {
+		// set the container metric to invalid for stopping the collector, also remove container metrics stack
+		dh.cStats[i].isInvalid = true
+		dh.cStats = append(dh.cStats[:i], dh.cStats[i+1:]...)
+	}
+	dh.Unlock()
+}
+
+func (dh *DockerHost) StopCollect() {
+	dh.Lock()
+	if !dh.closed {
+		//set all containerStack status to invalid, to stop all collecting
+		for _, containerStack := range dh.cStats {
+			containerStack.isInvalid = true
+		}
+		close(dh.Done)
+		dh.closed = true
+		dh.Logger.Println("stop all container collect")
+		Cache_StoppedDocker.Store(dh.ip, struct{}{})
+	}
+	dh.Unlock()
+}
+
+func (dh *DockerHost) isKnownContainer(cid string) int {
+	for i, cm := range dh.cStats {
+		if cm.ID == cid || cm.ContainerName == cid {
+			return i
+		}
+	}
+	return -1
+}
+
+func (dh *DockerHost) Length() int {
+	dh.RLock()
+	cmsLen := cap(dh.cStats)
+	dh.RUnlock()
+
+	return cmsLen
+}
+
+func (dh *DockerHost) IsValid() bool {
+	dh.RLock()
+	valid := !dh.closed
+	dh.RUnlock()
+
+	return valid
+}
+
+func (dh *DockerHost) AllNames() []string {
+	dh.RLock()
+
+	var names []string
+	for _, cm := range dh.cStats {
+		names = append(names, cm.ContainerName)
+	}
+	dh.RUnlock()
+
+	return names
+}
+
+func (dh *DockerHost) GetIP() string {
+	return dh.ip
+}
+
+func (dh *DockerHost) GetContainerStats() []*ContainerStats {
+	return dh.cStats
+}
+
+func (dh *DockerHost) GetAllLastMemory() float64 {
+	dh.RLock()
+
+	var totalMem float64
+	for _, cm := range dh.cStats {
+		totalMem += cm.GetLatestMemory()
+	}
+	dh.RUnlock()
+
+	return totalMem
+}
+
+// GetHostContainerInfo return Host's container info
+func GetHostContainerInfo(ip string) []string {
+	if hoststackTmp, ok := Cache_AllHostList.Load(ip); ok {
+		if dh, ok := hoststackTmp.(*DockerHost); ok {
+			if dh.GetIP() == ip {
+				return dh.AllNames()
+			}
+		}
+	}
+
+	return nil
+}
+
+func AllStoppedDHIP() []string {
+	ips := make([]string, 0, len(conf.HostIPs))
+	Cache_StoppedDocker.Range(func(key, value interface{}) bool {
+		ip, _ := key.(string)
+		ips = append(ips, ip)
+		return true
+	})
+
+	return ips
+}
+
+func StopAllDockerHost() {
+	times := 0
+	for len(AllStoppedDHIP()) != len(conf.HostIPs) {
+		if times >= 2 {
+			break
+		}
+		Cache_AllHostList.Range(func(key, value interface{}) bool {
+			if dh, ok := value.(*DockerHost); ok && dh.IsValid() {
+				dh.StopCollect()
+			}
+			time.Sleep(5 * time.Microsecond)
+			return true
+		})
+		times++
+	}
+	log.Printf("stop all docker host monitoring with %d loop", times)
+}
