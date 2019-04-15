@@ -10,5 +10,5 @@ This Project is based on golang docker engine api, also refer to some docker com
 ## Build a linux binary
 
 ```sh
-go build -tags=jsoniter -mod=vendor
+go build -tags=jsoniter -o monitor ./cmd/monitor/monitor.go
 ```
