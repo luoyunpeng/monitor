@@ -269,10 +269,6 @@ func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
 
-	if !conf.IsKnownHost(host) {
-		conf.HostIPs = append(conf.HostIPs, host)
-	}
-
 	if _, ok := models.Cache_AllHostList.Load(host); ok {
 		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
 		return
@@ -284,6 +280,9 @@ func AddDockerhost(ctx *gin.Context) {
 		return
 	}
 	models.Cache_StoppedDocker.Delete(host)
+	if !conf.IsKnownHost(host) {
+		conf.HostIPs = append(conf.HostIPs, host)
+	}
 	go monitor.Monitor(cli, host)
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
