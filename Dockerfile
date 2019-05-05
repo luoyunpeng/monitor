@@ -4,7 +4,6 @@ MAINTAINER luoyunpeng
 RUN mkdir /var/log/monitor
 COPY monitor /usr/local/bin/
 
-EXPOSE 8080
-EXPOSE 8070
+EXPOSE 8080 8070
 
 ENTRYPOINT ["monitor"]
