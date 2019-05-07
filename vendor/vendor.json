@@ -195,6 +195,14 @@
 			"versionExact": "v1.3.0"
 		},
 		{
+			"checksumSHA1": "sdJ8tgknZ0RVUVbHjgoeBmeaiOk=",
+			"path": "github.com/go-ini/ini",
+			"revision": "c85607071cf08ca1adaf48319cd1aa322e81d8c1",
+			"revisionTime": "2019-02-17T19:36:56Z",
+			"version": "v1.42.0",
+			"versionExact": "v1.42.0"
+		},
+		{
 			"checksumSHA1": "kxzfnN+IPF0sViI9iiUnI7aZVWM=",
 			"path": "github.com/go-sql-driver/mysql",
 			"revision": "d523deb1b23d913de5bdada721a6071e71283618",

@@ -1,23 +1,17 @@
-package common
+package monitor
 
 import (
 	"log"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
-)
-
-const (
-	hostAddr    = "http://localhost:"
-	defaultPort = "8086"
-	myDB        = "docker"
-	username    = "monitor"
-	password    = "iscas123"
+	"github.com/luoyunpeng/monitor/internal/conf"
 )
 
 var (
 	influCli   client.Client
 	MetricChan chan Metric
+	influxDB   string
 )
 
 // Metric is basic unit that insert into influxDB
@@ -28,22 +22,23 @@ type Metric struct {
 	ReadTime    time.Time
 }
 
-func init() {
+func initInfluxCli(conf *conf.Config) {
 	var err error
 	influCli, err = client.NewHTTPClient(client.HTTPConfig{
-		Addr:     hostAddr + defaultPort,
-		Username: username,
-		Password: password,
+		Addr:     conf.InfluxDB + conf.InfluxDBPort,
+		Username: conf.InfluxDBUser,
+		Password: conf.InfluxDBPassword,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	influxDB = conf.InfluxDB
 	MetricChan = make(chan Metric, 8)
 }
 
 // Write giving tag kv and fields kv to influxDB
-func Write() {
+func Write(conf *conf.Config) {
+	initInfluxCli(conf)
 	defer influCli.Close()
 
 	for m := range MetricChan {
@@ -53,7 +48,7 @@ func Write() {
 
 func internalWrite(m Metric) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  myDB,
+		Database:  influxDB,
 		Precision: "s",
 	})
 	if err != nil {

@@ -136,7 +136,7 @@ func GetHostContainerInfo(ip string) []string {
 }
 
 func AllStoppedDHIP() []string {
-	ips := make([]string, 0, len(conf.HostIPs))
+	ips := make([]string, 0, len(conf.C.Hosts))
 	Cache_StoppedDocker.Range(func(key, value interface{}) bool {
 		ip, _ := key.(string)
 		ips = append(ips, ip)
@@ -148,7 +148,7 @@ func AllStoppedDHIP() []string {
 
 func StopAllDockerHost() {
 	times := 0
-	for len(AllStoppedDHIP()) != len(conf.HostIPs) {
+	for len(AllStoppedDHIP()) != len(conf.C.Hosts) {
 		if times >= 2 {
 			break
 		}

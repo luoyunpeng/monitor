@@ -22,7 +22,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetric, error) {
 		if dh, ok := hoststackTmp.(*DockerHost); ok {
 			for _, containerStack := range dh.GetContainerStats() {
 				if containerStack.ID == id || (len(id) >= 12 && containerStack.ID == id[:12]) || containerStack.ContainerName == id {
-					return containerStack.Read(conf.DefaultReadLength), nil
+					return containerStack.Read(conf.C.CacheNum), nil
 				}
 			}
 			return nil, errors.New("given container name or id is unknown, or container is not running")
