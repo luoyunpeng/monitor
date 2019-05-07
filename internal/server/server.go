@@ -6,14 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/internal/models"
+	"github.com/luoyunpeng/monitor/internal/monitor"
 )
 
 func Start(port string) {
@@ -21,8 +19,6 @@ func Start(port string) {
 	app.Use(cors)
 
 	registerRoutes(app)
-
-	port = parsePort(port)
 
 	srv := &http.Server{
 		Addr:    port,
@@ -81,7 +77,7 @@ func signalListen(srv *http.Server) {
 	//release all
 	models.StopAllDockerHost()
 	log.Println("closing mysql db")
-	dbCloseErr := common.CloseDB()
+	dbCloseErr := monitor.CloseDB()
 	if dbCloseErr != nil {
 		log.Printf("Close DB err: %v", dbCloseErr)
 	}
@@ -92,14 +88,4 @@ func signalListen(srv *http.Server) {
 		log.Fatal("Monitor Server shutdown:", err)
 	}
 	log.Println("**** Monitor server exiting **** ")
-}
-
-func parsePort(port string) string {
-	_, err := strconv.Atoi(port)
-	if !strings.HasPrefix(port, ":") && err == nil {
-		port = ":" + port
-	} else {
-		port = ":8080"
-	}
-	return port
 }

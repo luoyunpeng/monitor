@@ -16,7 +16,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/internal/conf"
 	"github.com/luoyunpeng/monitor/internal/models"
 	"github.com/luoyunpeng/monitor/internal/util"
@@ -97,7 +96,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 			cms := models.NewCMetric("", container.ID[:12])
 			if dh.Add(cms) {
 				waitFirst.Add(1)
-				go collect(ctx, cms, dockerCli, waitFirst, dh)
+				go collect(cms, waitFirst, dh)
 			}
 		}
 	}
@@ -110,17 +109,17 @@ func Monitor(dockerCli *client.Client, ip string) {
 	eh := util.InitEventHandler()
 	eh.Handle("start", func(e events.Message) {
 		logger.Printf("event handler: received start event: %v", e)
-		cms := models.NewCMetric("", e.ID[:12])
+		cms := models.NewCMetric(e.Actor.Attributes["name"], e.ID[:12])
 		if dh.Add(cms) {
 			waitFirst.Add(1)
-			go collect(ctx, cms, dockerCli, waitFirst, dh)
+			go collect(cms, waitFirst, dh)
 		}
 	})
 
 	eh.Handle("die", func(e events.Message) {
 		logger.Printf("event handler: received die event: %v", e)
 		dh.Remove(e.ID[:12])
-		status, err := common.QueryContainerStatus(e.ID)
+		status, err := QueryContainerStatus(e.ID)
 		if err != nil {
 			logger.Printf("query container-%s status error %v", e.ID[:12], err)
 			return
@@ -130,12 +129,16 @@ func Monitor(dockerCli *client.Client, ip string) {
 		} else if status == -100 {
 			logger.Printf("no found %s record in table", e.ID[:12])
 		} else {
-			err := common.ChangeContainerStatus(e.ID, "0")
-			if err != nil {
-				logger.Printf("change container-%s status error %v", e.ID[:12], err)
+			if dh.IsValid() {
+				err := ChangeContainerStatus(e.ID, "0")
+				if err != nil {
+					logger.Printf("change container-%s status error %v", e.ID[:12], err)
+					return
+				}
+				logger.Printf("change container-%s status to 0", e.ID[:12])
 				return
 			}
-			logger.Printf("change container-%s status to 0", e.ID[:12])
+			logger.Printf("host-%s id done, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
 		}
 	})
 
@@ -152,7 +155,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 	logger.Println("container first collecting Done")
 }
 
-func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client, waitFirst *sync.WaitGroup, dh *models.DockerHost) {
+func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.DockerHost) {
 	var (
 		isFirstCollect                = true
 		lastNetworkTX, lastNetworkRX  float64
@@ -161,6 +164,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 		u                             = make(chan error, 1)
 		errNoSuchC                    = errors.New("no such container")
 		dockerDaemonErr               error
+		ctx                           = context.Background()
 	)
 
 	defer func() {
@@ -196,7 +200,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 					return
 				}
 
-				response, err := cli.ContainerStats(ctx, cm.ID, false)
+				response, err := dh.Cli.ContainerStats(ctx, cm.ID, false)
 				if err != nil && strings.Contains(err.Error(), "No such container") {
 					log.Printf("container-%s die event happend after calling stats", cm.ID)
 					u <- errNoSuchC
@@ -224,8 +228,10 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 				cfm.PidsCurrent = statsJSON.PidsStats.Current
 				netRx, netTx := util.CalculateNetwork(statsJSON.Networks)
 
-				if cm.ContainerName == "" {
+				if cm.ContainerName == "" && len(statsJSON.Name) >= 2 {
 					cm.ContainerName = statsJSON.Name[1:]
+				} else {
+					dh.Logger.Printf("container-%s get short or zero len name-%s", cm.ID, statsJSON.Name)
 				}
 				if isFirstCollect {
 					//network io
@@ -256,20 +262,20 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 					//dh.logger.Println(cm.ID, cm.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
 					WriteMetricToInfluxDB(dh.GetIP(), cm.ContainerName, cfm)
 				}
-				time.Sleep(conf.DefaultCollectDuration)
+				time.Sleep(conf.C.CollectDuration)
 			}
 		}
 	}()
 
 	timeoutTimes := 0
-	t := time.NewTimer(conf.DefaultCollectTimeOut)
+	t := time.NewTimer(conf.C.CollectTimeout)
 	for {
 		select {
 		case <-t.C:
 			// zero out the values if we have not received an update within
 			// the specified duration.
-			if timeoutTimes == conf.DefaultMaxTimeoutTimes {
-				_, err := cli.Ping(ctx)
+			if timeoutTimes == conf.C.MaxTimeoutTimes {
+				_, err := dh.Cli.Ping(ctx)
 				if err != nil {
 					dh.Logger.Printf("time out for collecting "+cm.ContainerName+" reach the top times, err of Ping is: %v", err)
 					dh.StopCollect()
@@ -277,7 +283,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 					return
 				}
 				timeoutTimes = 0
-				t.Reset(conf.DefaultCollectTimeOut)
+				t.Reset(conf.C.CollectTimeout)
 				continue
 			}
 			// if this is the first stat you get, release WaitGroup
@@ -287,7 +293,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 			}
 			timeoutTimes++
 			dh.Logger.Println("collect for container-"+cm.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
-			t.Reset(conf.DefaultCollectTimeOut)
+			t.Reset(conf.C.CollectTimeout)
 		case err := <-u:
 			//EOF error maybe mean docker daemon err
 			if err == io.EOF {
@@ -305,7 +311,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 				return
 			}
 			if err != nil {
-				t.Reset(conf.DefaultCollectTimeOut)
+				t.Reset(conf.C.CollectTimeout)
 				continue
 			}
 			//if err is nil mean collect metrics successfully
@@ -314,7 +320,7 @@ func collect(ctx context.Context, cm *models.ContainerStats, cli *client.Client,
 				isFirstCollect = false
 				waitFirst.Done()
 			}
-			t.Reset(conf.DefaultCollectTimeOut)
+			t.Reset(conf.C.CollectTimeout)
 		case <-dh.Done:
 			t.Stop()
 			return
@@ -380,7 +386,7 @@ type singalHostInfo struct {
 }
 
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
-func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log.Logger) {
+func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{}, 10)
 	tags := map[string]string{
@@ -408,7 +414,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo, logger *log
 }
 
 // Calculate all docker host info and write to influxDB
-func WriteAllHostInfo() {
+func WriteAllHostInfo(conf *conf.Config) {
 	var (
 		runningDockerHost, totalContainer, totalRunningContainer int
 		measurement                                              = "allHost"
@@ -423,10 +429,10 @@ func WriteAllHostInfo() {
 	}
 	logger := util.InitLog("all-host")
 
-	ticker := time.NewTicker(conf.DefaultCollectDuration * 5)
+	ticker := time.NewTicker(5 * conf.CollectDuration)
 	defer ticker.Stop()
 
-	go common.Write()
+	go Write(conf)
 
 	for range ticker.C {
 		runningDockerHost = 0
@@ -455,7 +461,7 @@ func WriteAllHostInfo() {
 				hostInfo.TotalStoppedContainer = hostInfo.TotalContainer - hostInfo.TotalRunningContainer
 				totalContainer += info.Containers
 				totalRunningContainer += info.ContainersRunning
-				WriteDockerHostInfoToInfluxDB(dh.GetIP(), hostInfo, logger)
+				WriteDockerHostInfoToInfluxDB(dh.GetIP(), hostInfo)
 			}
 
 			return true
@@ -464,9 +470,9 @@ func WriteAllHostInfo() {
 			logger.Println("no more docker daemon is running, return store all host info to influxDB")
 			return
 		}
-		fields["hostNum"] = len(conf.HostIPs)
+		fields["hostNum"] = len(conf.Hosts)
 		fields["dockerdRunning"] = runningDockerHost
-		fields["dockerdDead"] = len(conf.HostIPs) - runningDockerHost
+		fields["dockerdDead"] = len(conf.Hosts) - runningDockerHost
 		fields["totalContainer"] = totalContainer
 		fields["totalRunning"] = totalRunningContainer
 		fields["totalStopped"] = totalContainer - totalRunningContainer
@@ -479,10 +485,10 @@ func WriteAllHostInfo() {
 }
 
 func createMetricAndWrite(measurement string, tags map[string]string, fields map[string]interface{}, readTime time.Time) {
-	m := common.Metric{}
+	m := Metric{}
 	m.Measurement = measurement
 	m.Tags = tags
 	m.Fields = fields
 	m.ReadTime = readTime
-	common.MetricChan <- m
+	MetricChan <- m
 }

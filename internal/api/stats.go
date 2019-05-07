@@ -11,7 +11,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/luoyunpeng/monitor/common"
 	"github.com/luoyunpeng/monitor/internal/conf"
 	"github.com/luoyunpeng/monitor/internal/models"
 	"github.com/luoyunpeng/monitor/internal/monitor"
@@ -62,11 +61,10 @@ func ContainerMem(ctx *gin.Context) {
 		return
 	}
 
-	cMemArray := [conf.DefaultReadLength]struct {
+	cMem := make([]struct {
 		Mem      float64
 		ReadTime string
-	}{}
-	cMem := cMemArray[0:0:conf.DefaultReadLength]
+	}, 0, conf.C.CacheNum)
 
 	for _, cm := range csm {
 		cMem = append(cMem, struct {
@@ -156,11 +154,10 @@ func ContainerCPU(ctx *gin.Context) {
 		return
 	}
 
-	cCPUArray := [conf.DefaultReadLength]struct {
+	cCPU := make([]struct {
 		CPU      float64
 		ReadTime string
-	}{}
-	cCPU := cCPUArray[0:0:conf.DefaultReadLength]
+	}, 0, conf.C.CacheNum)
 
 	for _, cm := range csm {
 		cCPU = append(cCPU, struct {
@@ -189,12 +186,11 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		return
 	}
 
-	cNetworkIOArray := [conf.DefaultReadLength]struct {
+	cNetworkIO := make([]struct {
 		NetworkTX float64
 		NetworkRX float64
 		ReadTime  string
-	}{}
-	cNetworkIO := cNetworkIOArray[0:0:conf.DefaultReadLength]
+	}, 0, conf.C.CacheNum)
 
 	for _, cm := range csm {
 		cNetworkIO = append(cNetworkIO, struct {
@@ -224,13 +220,11 @@ func ContainerBlockIO(ctx *gin.Context) {
 		return
 	}
 
-	// can not use a anonymous array to initialize a slice, since anonymous array is unaddressable,
-	cBlockIOArray := [conf.DefaultReadLength]struct {
+	cBlockIO := make([]struct {
 		BlockRead  float64
 		BlockWrite float64
 		ReadTime   string
-	}{}
-	cBlockIO := cBlockIOArray[0:0:conf.DefaultReadLength]
+	}, 0, conf.C.CacheNum)
 
 	for _, cm := range csm {
 		cBlockIO = append(cBlockIO, struct {
@@ -274,14 +268,14 @@ func AddDockerhost(ctx *gin.Context) {
 		return
 	}
 
-	cli, err := common.InitClient(host)
+	cli, err := monitor.InitClient(host)
 	if err != nil {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
 	models.Cache_StoppedDocker.Delete(host)
 	if !conf.IsKnownHost(host) {
-		conf.HostIPs = append(conf.HostIPs, host)
+		conf.C.Hosts = append(conf.C.Hosts, host)
 	}
 	go monitor.Monitor(cli, host)
 	ctx.JSONP(http.StatusOK, "successfully add")
@@ -453,7 +447,7 @@ func checkParam(id, hostName string) string {
 	}
 
 	isHostKnown := false
-	for _, h := range conf.HostIPs {
+	for _, h := range conf.C.Hosts {
 		if hostName == h {
 			isHostKnown = true
 		}
