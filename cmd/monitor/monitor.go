@@ -20,10 +20,6 @@ var (
 func main() {
 	config.Load()
 
-	flag.StringVar(&port, "port", ":8080", "base image use to create container")
-	flag.Parse()
-	port = parsePort(port)
-
 	for _, ip := range config.MonitorInfo.Hosts {
 		ip = strings.TrimSpace(ip)
 		cli, err := monitor.InitClient(ip)
@@ -39,10 +35,13 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":8070", nil))
 	}()
-	server.Start(port)
+	server.Start(parsePort())
 }
 
-func parsePort(port string) string {
+func parsePort() string {
+	flag.StringVar(&port, "port", ":8080", "base image use to create container")
+	flag.Parse()
+
 	_, err := strconv.Atoi(port)
 
 	if !strings.HasPrefix(port, ":") && err == nil {
