@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/monitor"
 	"github.com/luoyunpeng/monitor/internal/server"
 )
@@ -17,48 +17,36 @@ var (
 	port string
 )
 
-func init() {
-
-}
-
 func main() {
-	conf, err := conf.NewConfig()
-	if err != nil {
-		panic(err)
-	}
-
-	if len(conf.Hosts) == 0 {
-		panic("at least one host must given")
-	}
+	config.Load()
 
 	flag.StringVar(&port, "port", ":8080", "base image use to create container")
 	flag.Parse()
-	//for profiling
-	go func() {
-		log.Println(http.ListenAndServe(":8070", nil))
-	}()
+	port = parsePort(port)
 
-	for _, ip := range conf.Hosts {
+	for _, ip := range config.MonitorInfo.Hosts {
 		ip = strings.TrimSpace(ip)
 		cli, err := monitor.InitClient(ip)
 		if err != nil {
-			log.Println("connect to ", ip, " err :", err)
+			log.Printf("connect to host-%s occur error: %v ", ip, err)
 			continue
 		}
 		go monitor.Monitor(cli, ip)
 	}
-	go monitor.WriteAllHostInfo(conf)
+	go monitor.WriteAllHostInfo()
 
-	port = parsePort(port)
+	//for profiling
+	go func() {
+		log.Println(http.ListenAndServe(":8070", nil))
+	}()
 	server.Start(port)
 }
 
 func parsePort(port string) string {
 	_, err := strconv.Atoi(port)
+
 	if !strings.HasPrefix(port, ":") && err == nil {
-		port = ":" + port
-	} else {
-		port = ":8080"
+		return ":" + port
 	}
-	return port
+	return ":8080"
 }

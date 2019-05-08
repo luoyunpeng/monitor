@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
-	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 // DockerHost
@@ -60,7 +60,7 @@ func (dh *DockerHost) StopCollect() {
 		close(dh.Done)
 		dh.closed = true
 		dh.Logger.Println("stop all container collect")
-		Cache_StoppedDocker.Store(dh.ip, struct{}{})
+		StoppedDockerHost.Store(dh.ip, struct{}{})
 	}
 	dh.Unlock()
 }
@@ -124,7 +124,7 @@ func (dh *DockerHost) GetAllLastMemory() float64 {
 
 // GetHostContainerInfo return Host's container info
 func GetHostContainerInfo(ip string) []string {
-	if hoststackTmp, ok := Cache_AllHostList.Load(ip); ok {
+	if hoststackTmp, ok := DockerHostCache.Load(ip); ok {
 		if dh, ok := hoststackTmp.(*DockerHost); ok {
 			if dh.GetIP() == ip {
 				return dh.AllNames()
@@ -136,8 +136,8 @@ func GetHostContainerInfo(ip string) []string {
 }
 
 func AllStoppedDHIP() []string {
-	ips := make([]string, 0, len(conf.C.Hosts))
-	Cache_StoppedDocker.Range(func(key, value interface{}) bool {
+	ips := make([]string, 0, len(config.MonitorInfo.Hosts))
+	StoppedDockerHost.Range(func(key, value interface{}) bool {
 		ip, _ := key.(string)
 		ips = append(ips, ip)
 		return true
@@ -148,11 +148,11 @@ func AllStoppedDHIP() []string {
 
 func StopAllDockerHost() {
 	times := 0
-	for len(AllStoppedDHIP()) != len(conf.C.Hosts) {
+	for len(AllStoppedDHIP()) != len(config.MonitorInfo.Hosts) {
 		if times >= 2 {
 			break
 		}
-		Cache_AllHostList.Range(func(key, value interface{}) bool {
+		DockerHostCache.Range(func(key, value interface{}) bool {
 			if dh, ok := value.(*DockerHost); ok && dh.IsValid() {
 				dh.StopCollect()
 			}

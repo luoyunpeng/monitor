@@ -1,4 +1,4 @@
-package conf
+package config
 
 import (
 	"time"
@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	C *Config
+	MonitorInfo *configure
 )
 
-type Config struct {
+type configure struct {
 	CacheNum        int
 	MaxTimeoutTimes int
 	CollectDuration time.Duration
@@ -31,15 +31,18 @@ type Config struct {
 	InfluxDBPassword string
 }
 
-func NewConfig() (*Config, error) {
+func Load() {
 	cfg, err := ini.Load("monitor.ini")
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	conf := Config{}
+	conf := configure{}
 	err = cfg.Section("monitor").MapTo(&conf)
 	if err != nil {
-		return nil, err
+		panic(err)
+	}
+	if len(MonitorInfo.Hosts) == 0 {
+		panic("at least one host must given")
 	}
 	if conf.CollectDuration < 30 || conf.CollectDuration > 120 {
 		conf.CollectDuration = 60
@@ -48,19 +51,14 @@ func NewConfig() (*Config, error) {
 	conf.CollectTimeout = conf.CollectDuration + 10*time.Second
 	conf.SqlHost = conf.SqlHost + ":" + conf.SqlPort
 
-	C = &conf
-	return &conf, nil
-}
-
-func (c *Config) GetCacheNum() int {
-	return c.CacheNum
+	MonitorInfo = &conf
 }
 
 func IsKnownHost(host string) bool {
-	if C.Hosts == nil {
+	if MonitorInfo.Hosts == nil {
 		panic("please init config first")
 	}
-	for _, v := range C.Hosts {
+	for _, v := range MonitorInfo.Hosts {
 		if v == host {
 			return true
 		}

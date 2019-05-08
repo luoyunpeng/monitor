@@ -19,7 +19,6 @@ func Start(port string) {
 	app.Use(cors)
 
 	registerRoutes(app)
-
 	srv := &http.Server{
 		Addr:    port,
 		Handler: app,
@@ -31,7 +30,6 @@ func Start(port string) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
-
 	signalListen(srv)
 }
 
@@ -70,7 +68,7 @@ func signalListen(srv *http.Server) {
 	// Wait for interrupt signal to gracefully shutdown the server with
 	// a timeout of 5 seconds.
 	quit := make(chan os.Signal)
-	signal.Notify(quit, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-quit
 	log.Println("**** Graceful shutdown monitor server ****")
 
