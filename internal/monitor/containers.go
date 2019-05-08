@@ -16,7 +16,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/luoyunpeng/monitor/internal/conf"
 	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/models"
 	"github.com/luoyunpeng/monitor/internal/util"
