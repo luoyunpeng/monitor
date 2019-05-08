@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	MonitorInfo *configure
+	MonitorInfo configure
 )
 
 type configure struct {
@@ -36,22 +36,19 @@ func Load() {
 	if err != nil {
 		panic(err)
 	}
-	conf := configure{}
-	err = cfg.Section("monitor").MapTo(&conf)
+	err = cfg.Section("monitor").MapTo(&MonitorInfo)
 	if err != nil {
 		panic(err)
 	}
 	if len(MonitorInfo.Hosts) == 0 {
 		panic("at least one host must given")
 	}
-	if conf.CollectDuration < 30 || conf.CollectDuration > 120 {
-		conf.CollectDuration = 60
+	if MonitorInfo.CollectDuration < 30 || MonitorInfo.CollectDuration > 120 {
+		MonitorInfo.CollectDuration = 60
 	}
-	conf.CollectDuration = conf.CollectDuration * time.Second
-	conf.CollectTimeout = conf.CollectDuration + 10*time.Second
-	conf.SqlHost = conf.SqlHost + ":" + conf.SqlPort
-
-	MonitorInfo = &conf
+	MonitorInfo.CollectDuration = MonitorInfo.CollectDuration * time.Second
+	MonitorInfo.CollectTimeout = MonitorInfo.CollectDuration + 10*time.Second
+	MonitorInfo.SqlHost = MonitorInfo.SqlHost + ":" + MonitorInfo.SqlPort
 }
 
 func IsKnownHost(host string) bool {
