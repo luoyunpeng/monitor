@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 type ParsedConatinerMetric struct {
@@ -39,7 +39,7 @@ func NewCMetric(ContainerName, id string) *ContainerStats {
 	return &ContainerStats{
 		ContainerName:   ContainerName,
 		ID:              id,
-		ReadAbleMetrics: make([]ParsedConatinerMetric, 0, conf.C.CacheNum),
+		ReadAbleMetrics: make([]ParsedConatinerMetric, 0, config.MonitorInfo.CacheNum),
 		isFirstCollect:  true,
 	}
 }
@@ -47,10 +47,10 @@ func NewCMetric(ContainerName, id string) *ContainerStats {
 func (cm *ContainerStats) Put(rdMetric ParsedConatinerMetric) bool {
 	cm.Lock()
 
-	if len(cm.ReadAbleMetrics) == conf.C.CacheNum {
+	if len(cm.ReadAbleMetrics) == config.MonitorInfo.CacheNum {
 		//delete the first one also the oldest one, and append the latest one
 		copy(cm.ReadAbleMetrics, cm.ReadAbleMetrics[1:])
-		cm.ReadAbleMetrics[conf.C.CacheNum-1] = rdMetric
+		cm.ReadAbleMetrics[config.MonitorInfo.CacheNum-1] = rdMetric
 		cm.Unlock()
 		return true
 	}

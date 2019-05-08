@@ -2,18 +2,20 @@ package monitor
 
 import (
 	"database/sql"
+	"log"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 var (
 	db  *sql.DB
 	err error
 
-	dbHost     = "192.168.100.183:3306"
-	dbUser     = "root"
-	dbPassword = "123"
-	dbName     = "blockchain_db"
+	dbHost     string
+	dbUser     string
+	dbPassword string
+	dbName     string
 
 	//tableOrder     = "b_order"
 	tableContainer = "b_container_service"
@@ -23,7 +25,15 @@ func InitMysql() error {
 	if db != nil {
 		return nil
 	}
-	db, err = sql.Open("mysql", dbUser+":"+dbPassword+"@tcp("+dbHost+")/"+dbName+"?charset=utf8")
+
+	dbHost = config.MonitorInfo.SqlHost
+	dbUser = config.MonitorInfo.SqlUser
+	dbPassword = config.MonitorInfo.SqlPassword
+	dbName = config.MonitorInfo.SqlDBName
+
+	dataSource := dbUser + ":" + dbPassword + "@tcp(" + dbHost + ")/" + dbName + "?charset=utf8"
+	log.Println("init mysql: ", dataSource)
+	db, err = sql.Open("mysql", dataSource)
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
-	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 var (
@@ -22,8 +22,11 @@ type Metric struct {
 	ReadTime    time.Time
 }
 
-func initInfluxCli(conf *conf.Config) {
+func initInfluxCli() {
 	var err error
+	conf := config.MonitorInfo
+	f := "init influxCli from addr-%s, db: %s ,user: %s, password: %s"
+	log.Printf(f, conf.InfluxDB+conf.InfluxDBPort, conf.InfluxDBName, conf.InfluxDBUser, conf.InfluxDBPassword)
 	influCli, err = client.NewHTTPClient(client.HTTPConfig{
 		Addr:     conf.InfluxDB + conf.InfluxDBPort,
 		Username: conf.InfluxDBUser,
@@ -32,13 +35,13 @@ func initInfluxCli(conf *conf.Config) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	influxDB = conf.InfluxDB
+	influxDB = conf.InfluxDBName
 	MetricChan = make(chan Metric, 8)
 }
 
 // Write giving tag kv and fields kv to influxDB
-func Write(conf *conf.Config) {
-	initInfluxCli(conf)
+func Write() {
+	initInfluxCli()
 	defer influCli.Close()
 
 	for m := range MetricChan {

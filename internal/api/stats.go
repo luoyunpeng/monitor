@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/luoyunpeng/monitor/internal/conf"
+	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/models"
 	"github.com/luoyunpeng/monitor/internal/monitor"
 	"github.com/luoyunpeng/monitor/internal/util"
@@ -64,7 +64,7 @@ func ContainerMem(ctx *gin.Context) {
 	cMem := make([]struct {
 		Mem      float64
 		ReadTime string
-	}, 0, conf.C.CacheNum)
+	}, 0, config.MonitorInfo.CacheNum)
 
 	for _, cm := range csm {
 		cMem = append(cMem, struct {
@@ -157,7 +157,7 @@ func ContainerCPU(ctx *gin.Context) {
 	cCPU := make([]struct {
 		CPU      float64
 		ReadTime string
-	}, 0, conf.C.CacheNum)
+	}, 0, config.MonitorInfo.CacheNum)
 
 	for _, cm := range csm {
 		cCPU = append(cCPU, struct {
@@ -190,7 +190,7 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		NetworkTX float64
 		NetworkRX float64
 		ReadTime  string
-	}, 0, conf.C.CacheNum)
+	}, 0, config.MonitorInfo.CacheNum)
 
 	for _, cm := range csm {
 		cNetworkIO = append(cNetworkIO, struct {
@@ -224,7 +224,7 @@ func ContainerBlockIO(ctx *gin.Context) {
 		BlockRead  float64
 		BlockWrite float64
 		ReadTime   string
-	}, 0, conf.C.CacheNum)
+	}, 0, config.MonitorInfo.CacheNum)
 
 	for _, cm := range csm {
 		cBlockIO = append(cBlockIO, struct {
@@ -263,7 +263,7 @@ func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
 
-	if _, ok := models.Cache_AllHostList.Load(host); ok {
+	if _, ok := models.DockerHostCache.Load(host); ok {
 		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
 		return
 	}
@@ -273,9 +273,9 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-	models.Cache_StoppedDocker.Delete(host)
-	if !conf.IsKnownHost(host) {
-		conf.C.Hosts = append(conf.C.Hosts, host)
+	models.StoppedDockerHost.Delete(host)
+	if !config.IsKnownHost(host) {
+		config.MonitorInfo.Hosts = append(config.MonitorInfo.Hosts, host)
 	}
 	go monitor.Monitor(cli, host)
 	ctx.JSONP(http.StatusOK, "successfully add")
@@ -284,12 +284,12 @@ func AddDockerhost(ctx *gin.Context) {
 func StopDockerHostCollect(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
-	if !conf.IsKnownHost(host) {
+	if !config.IsKnownHost(host) {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
-	if hoststackTmp, ok := models.Cache_AllHostList.Load(host); ok {
+	if hoststackTmp, ok := models.DockerHostCache.Load(host); ok {
 		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
 			dh.StopCollect()
 			time.Sleep(1 * time.Millisecond)
@@ -312,15 +312,15 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
-func ContainerSliceCap_Debug(ctx *gin.Context) {
+func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
-	if !conf.IsKnownHost(host) {
+	if !config.IsKnownHost(host) {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
-	if hoststackTmp, ok := models.Cache_AllHostList.Load(host); ok {
+	if hoststackTmp, ok := models.DockerHostCache.Load(host); ok {
 		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
 			ctx.JSONP(http.StatusOK, dh.Length())
 			return
@@ -373,7 +373,7 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	value, isLoaded := models.Cache_AllHostList.Load(hostName)
+	value, isLoaded := models.DockerHostCache.Load(hostName)
 	if dh, ok := value.(*models.DockerHost); isLoaded && ok && dh.IsValid() {
 		logBody, err := dh.Cli.ContainerLogs(context.Background(), id, logOptions)
 		if err != nil {
@@ -447,7 +447,7 @@ func checkParam(id, hostName string) string {
 	}
 
 	isHostKnown := false
-	for _, h := range conf.C.Hosts {
+	for _, h := range config.MonitorInfo.Hosts {
 		if hostName == h {
 			isHostKnown = true
 		}
