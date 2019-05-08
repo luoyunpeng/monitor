@@ -108,8 +108,8 @@ func Monitor(dockerCli *client.Client, ip string) {
 	started := make(chan struct{})
 	eh := util.InitEventHandler()
 	eh.Handle("start", func(e events.Message) {
-		logger.Printf("event handler: received start event: %v", e)
 		cms := models.NewCMetric(e.Actor.Attributes["name"], e.ID[:12])
+		logger.Printf("event handler: received %s-start event: %v", cms.ContainerName, e)
 		if dh.Add(cms) {
 			waitFirst.Add(1)
 			go collect(cms, waitFirst, dh)
@@ -230,7 +230,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				if cm.ContainerName == "" && len(statsJSON.Name) >= 2 {
 					cm.ContainerName = statsJSON.Name[1:]
-				} else {
+				} else if len(statsJSON.Name) <= 2 {
 					dh.Logger.Printf("container-%s get short or zero len name-%s", cm.ID, statsJSON.Name)
 				}
 				if isFirstCollect {
