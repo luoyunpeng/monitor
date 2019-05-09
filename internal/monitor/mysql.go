@@ -32,7 +32,7 @@ func InitMysql() error {
 	dbName = config.MonitorInfo.SqlDBName
 
 	dataSource := dbUser + ":" + dbPassword + "@tcp(" + dbHost + ")/" + dbName + "?charset=utf8"
-	log.Println("init mysql: ", dataSource)
+	log.Println("[MySQL] init mysql: ", dataSource)
 	db, err = sql.Open("mysql", dataSource)
 	if err != nil {
 		return err
