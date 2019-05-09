@@ -2,7 +2,6 @@ language: go
 
 go:
   - 1.12.x
-  - master
 
 os:
   - linux
@@ -10,3 +9,8 @@ os:
 script: go build -tags=jsoniter  -o monitor ./cmd/monitor/monitor.go
 notifications:
   email: false
+
+cache:
+  directories:
+    - $HOME/.gimme/versions
+    - $HOME/.cache/go-build
