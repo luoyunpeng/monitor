@@ -1,5 +1,5 @@
 # docker monitor
-
+[![Build Status](https://travis-ci.org/luoyunpeng/monitor.svg?branch=master)](https://travis-ci.org/luoyunpeng/monitor)
 This Project is based on golang docker engine api, also refer to some docker command line source code,
 ####
 
