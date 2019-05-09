@@ -1,3 +1,4 @@
+# build from golang-alpine
 FROM alpine:latest
 
 MAINTAINER luoyunpeng
