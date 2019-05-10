@@ -13,4 +13,3 @@ notifications:
 cache:
   directories:
     - $HOME/.gimme/versions
-    - $HOME/.cache/go-build
