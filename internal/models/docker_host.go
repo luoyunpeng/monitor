@@ -1,12 +1,17 @@
 package models
 
 import (
+	"context"
+	"io"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/docker/cli/cli/command"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/luoyunpeng/monitor/internal/config"
+	"github.com/pkg/errors"
 )
 
 // DockerHost
@@ -120,6 +125,38 @@ func (dh *DockerHost) GetAllLastMemory() float64 {
 	dh.RUnlock()
 
 	return totalMem
+}
+
+func (dh *DockerHost) CopyFromContainer(ctx context.Context, srcContainer, srcPath string) (io.ReadCloser, string, error) {
+	content, stat, err := dh.Cli.CopyFromContainer(ctx, srcContainer, srcPath)
+	if err != nil {
+		return nil, "", err
+	}
+	dh.Logger.Printf("copy file-%s with size-%d, from container-%s in host-%s", srcPath, stat.Size, srcContainer, dh.ip)
+	return content, stat.Name, nil
+}
+
+func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser, destContainer, destPath, name string) error {
+	dstStat, err := dh.Cli.ContainerStatPath(ctx, destContainer, destPath)
+	if err != nil {
+		return err
+	}
+
+	// Validate the destination path
+	if err := command.ValidateOutputPathFileMode(dstStat.Mode); err != nil {
+		return errors.Wrapf(err, `destination "%s:%s" must be a directory or a regular file`, destContainer, destPath)
+	}
+
+	options := types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: false,
+	}
+
+	defer func() {
+		content.Close()
+		content = nil
+	}()
+	dh.Logger.Printf("copy file-%s to container-%s:%s in host-%s", name, destContainer, destPath, dh.ip)
+	return dh.Cli.CopyToContainer(ctx, destContainer, destPath, content, options)
 }
 
 // GetHostContainerInfo return Host's container info

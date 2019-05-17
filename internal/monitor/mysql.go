@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/luoyunpeng/monitor/internal/config"
+	"github.com/luoyunpeng/monitor/internal/models"
 )
 
 var (
@@ -83,6 +84,31 @@ func QueryContainerStatus(id string) (int, error) {
 	}
 
 	return status, nil
+}
+
+func QueryOrder(orderId string) ([]models.OrderInfo, error) {
+	errInit := InitMysql()
+	if errInit != nil {
+		return nil, errInit
+	}
+
+	query := "SELECT c_id, ipaddr, master_flag FROM b_container_service,b_host_pool c WHERE b_container_service.host_id = c.host_id AND order_id =? "
+	rows, err := db.Query(query, orderId)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]models.OrderInfo, 0, 5)
+	defer rows.Close()
+	for rows.Next() {
+		orderInfo := models.OrderInfo{}
+		if err = rows.Scan(&orderInfo.ContainerID, &orderInfo.IpAddr, &orderInfo.MasterFlag); err != nil {
+			return nil, err
+		}
+
+		res = append(res, orderInfo)
+	}
+	return res, nil
 }
 
 func CloseDB() error {

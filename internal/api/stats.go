@@ -329,6 +329,77 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "stopped host")
 }
 
+func CopyAcrossContainer(ctx *gin.Context) {
+	fileName := ctx.Params.ByName("file")
+	destHost := ctx.DefaultQuery("host", "")
+	if fileName == "" || destHost == "" {
+		ctx.JSON(http.StatusNotFound, "file name/destHost must given")
+		return
+	}
+	srcHost := "192.168.100.177"
+
+	srcContainer := "testcp1"
+	destContainer := "testcp"
+
+	srcPath := "/opt/"
+	destPath := srcPath
+	srcPath += fileName
+	c := context.Background()
+
+	srcDH, err := models.GetDockerHost(srcHost)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	destDH, err := models.GetDockerHost(destHost)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	content, name, err := srcDH.CopyFromContainer(c, srcContainer, srcPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	err = destDH.CopyToContainer(c, content, destContainer, destPath, name)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	ctx.JSON(http.StatusOK, "across containers copy ok")
+}
+
+func CopyAcrossContainer_order(ctx *gin.Context) {
+	srcOrderId := ctx.DefaultQuery("srcOrder", "")
+	destOrderId := ctx.DefaultQuery("destOrder", "")
+	if srcOrderId == "" || destOrderId == "" {
+		ctx.JSON(http.StatusNotFound, "src and dest orderId must given")
+		return
+	}
+
+	srcOrderInfo, err := monitor.QueryOrder(srcOrderId)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	destOrderInfo, err := monitor.QueryOrder(destOrderId)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	err = models.CheckOrderInfo(srcOrderInfo, destOrderInfo)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	ctx.JSON(http.StatusOK, "across containers copy ok")
+}
+
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
