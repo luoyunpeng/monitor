@@ -31,3 +31,12 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetric, error) {
 
 	return nil, errors.New("given host " + host + " is not loaded")
 }
+
+func GetDockerHost(ip string) (*DockerHost, error) {
+	if hoststackTmp, ok := DockerHostCache.Load(ip); ok {
+		if dh, ok := hoststackTmp.(*DockerHost); ok {
+			return dh, nil
+		}
+	}
+	return nil, errors.New("no such host")
+}
