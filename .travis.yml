@@ -9,7 +9,3 @@ os:
 script: go build -tags=jsoniter  -o monitor ./cmd/monitor/monitor.go
 notifications:
   email: false
-
-cache:
-  directories:
-    - $HOME/.gimme/versions

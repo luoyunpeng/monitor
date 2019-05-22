@@ -66,13 +66,13 @@ spec:
         image: monitor:0.7
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
-          name: metric-api
-        - containerPort: 8070
-          name: profile-api
+        - name: metric-api
+          containerPort: 8080
+        - name: profile-api
+          containerPort: 8070
         volumeMounts:
-        - mountPath: /var/log/monitor
-          name: monitor-pv-storage
+        - name: monitor-pv-storage
+          mountPath: /var/log/monitor
         - name: host-time
           mountPath: /etc/localtime
       volumes:
