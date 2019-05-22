@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -11,7 +13,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/luoyunpeng/monitor/internal/config"
-	"github.com/pkg/errors"
 )
 
 // DockerHost
@@ -144,7 +145,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 
 	// Validate the destination path
 	if err := command.ValidateOutputPathFileMode(dstStat.Mode); err != nil {
-		return errors.Wrapf(err, `destination "%s:%s" must be a directory or a regular file`, destContainer, destPath)
+		return errors.New(fmt.Sprintf("destination %s:%s must be a directory or a regular file", destContainer, destPath))
 	}
 
 	options := types.CopyToContainerOptions{
