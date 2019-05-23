@@ -13,7 +13,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/luoyunpeng/monitor/internal/config"
@@ -36,46 +35,6 @@ func Monitor(dockerCli *client.Client, ip string) {
 	dh := models.NewDockerHost(ip, logger)
 	dh.Cli = dockerCli
 	models.DockerHostCache.Store(ip, dh)
-
-	// monitorContainerEvents watches for container creation and removal (only
-	// used when calling `docker stats` without arguments).
-	monitorContainerEvents := func(started chan<- struct{}, c chan events.Message) {
-		defer func() {
-			close(c)
-			if dockerCli != nil {
-				logger.Println("close docker-cli and remove it from DockerCliList and host list")
-				models.DockerHostCache.Delete(ip)
-				dockerCli.Close()
-			}
-		}()
-
-		f := filters.NewArgs()
-		f.Add("type", "container")
-		options := types.EventsOptions{
-			Filters: f,
-		}
-
-		eventq, errq := dockerCli.Events(ctx, options)
-
-		// Whether we successfully subscribed to eventq or not, we can now
-		// unblock the main goroutine.
-		close(started)
-
-		// wait for events happens
-		for {
-			select {
-			case event := <-eventq:
-				c <- event
-			case err := <-errq:
-				logger.Printf("host: err happen when listen docker event: %v", err)
-				dh.StopCollect()
-				return
-			case <-dh.Done:
-				//logger.Printf("connect to docker daemon error or stop collect by call method, stop container event listener")
-				return
-			}
-		}
-	}
 
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
@@ -138,13 +97,13 @@ func Monitor(dockerCli *client.Client, ip string) {
 				logger.Printf("change container-%s status to 0", e.ID[:12])
 				return
 			}
-			logger.Printf("host-%s id done, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
+			logger.Printf("host-%s is down, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
 		}
 	})
 
 	eventChan := make(chan events.Message)
 	go eh.Watch(eventChan)
-	go monitorContainerEvents(started, eventChan)
+	go dh.ContainerEvents(ctx, started, eventChan)
 	// wait event listener go routine started
 	<-started
 
@@ -326,19 +285,6 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 			return
 		}
 	}
-}
-
-// GetHostContainerInfo return Host's container info
-func GetHostContainerInfo(ip string) []string {
-	if hoststackTmp, ok := models.DockerHostCache.Load(ip); ok {
-		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
-			if dh.GetIP() == ip {
-				return dh.AllNames()
-			}
-		}
-	}
-
-	return nil
 }
 
 // WriteMetricToInfluxDB write docker container metric to influxDB

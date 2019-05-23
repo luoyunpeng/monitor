@@ -11,6 +11,8 @@ import (
 
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/luoyunpeng/monitor/internal/config"
 )
@@ -126,6 +128,45 @@ func (dh *DockerHost) GetAllLastMemory() float64 {
 	dh.RUnlock()
 
 	return totalMem
+}
+
+// monitorContainerEvents watches for container creation and removal (only
+// used when calling `docker stats` without arguments).
+func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct{}, c chan events.Message) {
+	defer func() {
+		close(c)
+		if dh.Cli != nil {
+			dh.Logger.Println("close docker-cli and remove it from DockerCliList and host list")
+			DockerHostCache.Delete(dh.ip)
+			dh.Cli.Close()
+		}
+	}()
+
+	f := filters.NewArgs()
+	f.Add("type", "container")
+	options := types.EventsOptions{
+		Filters: f,
+	}
+
+	eventq, errq := dh.Cli.Events(ctx, options)
+
+	// Whether we successfully subscribed to eventq or not, we can now
+	// unblock the main goroutine.
+	close(started)
+
+	// wait for container events happens
+	for {
+		select {
+		case event := <-eventq:
+			c <- event
+		case err := <-errq:
+			dh.Logger.Printf("host: err happen when listen docker event: %v", err)
+			dh.StopCollect()
+			return
+		case <-dh.Done:
+			return
+		}
+	}
 }
 
 func (dh *DockerHost) CopyFromContainer(ctx context.Context, srcContainer, srcPath string) (io.ReadCloser, string, error) {
