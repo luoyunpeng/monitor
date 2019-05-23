@@ -35,15 +35,16 @@ func Start(port string) {
 
 func cors(c *gin.Context) {
 	whiteList := map[string]int{
-		"http://192.168.100.173":     1,
-		"http://www.repchain.net.cn": 2,
-		"http://localhost:8080":      3,
+		"http://192.168.100.173":      1,
+		"http://www.repchain.net.cn":  2,
+		"http://localhost:8080":       3,
+		"http://test.repchain.net.cn": 4,
+		"http://baas.repchain.net.cn": 5,
 	}
 
 	// request header
 	origin := c.Request.Header.Get("Origin")
 	if _, ok := whiteList[origin]; ok {
-		log.Println("allow access from origin: ", origin)
 		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		// allow to access all origin
 		c.Header("Access-Control-Allow-Origin", origin)
@@ -56,7 +57,7 @@ func cors(c *gin.Context) {
 		c.Header("Access-Control-Max-Age", "172800")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Set("content-type", "application/json")
-	} else {
+	} else if !ok && origin != "" {
 		log.Println("forbid access from origin: ", origin)
 	}
 
