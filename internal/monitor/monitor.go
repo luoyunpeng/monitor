@@ -319,7 +319,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics models.P
 	createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
 }
 
-type singalHostInfo struct {
+type singleHostInfo struct {
 	Name                  string
 	Images                int
 	TotalContainer        int
@@ -332,7 +332,7 @@ type singalHostInfo struct {
 }
 
 // WriteDockerHostInfoToInfluxDB write Docker host info to influxDB
-func WriteDockerHostInfoToInfluxDB(host string, info singalHostInfo) {
+func WriteDockerHostInfoToInfluxDB(host string, info singleHostInfo) {
 	measurement := "dockerHostInfo"
 	fields := make(map[string]interface{}, 10)
 	tags := map[string]string{
@@ -365,7 +365,7 @@ func WriteAllHostInfo() {
 		runningDockerHost, totalContainer, totalRunningContainer int
 		measurement                                              = "allHost"
 		info                                                     types.Info
-		hostInfo                                                 singalHostInfo
+		hostInfo                                                 singleHostInfo
 
 		infoErr error
 	)
@@ -394,7 +394,7 @@ func WriteAllHostInfo() {
 					return true
 				}
 				runningDockerHost++
-				hostInfo = singalHostInfo{
+				hostInfo = singleHostInfo{
 					Name:                  info.Name,
 					Images:                info.Images,
 					TotalContainer:        info.Containers,
