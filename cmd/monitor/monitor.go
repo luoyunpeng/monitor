@@ -11,6 +11,7 @@ import (
 	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/monitor"
 	"github.com/luoyunpeng/monitor/internal/server"
+	"github.com/luoyunpeng/monitor/internal/util"
 )
 
 var (
@@ -20,14 +21,20 @@ var (
 func main() {
 	config.Load()
 
+	//global logger
+	logger := util.InitLog("global")
+	if logger == nil {
+		panic("global logger nil")
+	}
+	config.MonitorInfo.Logger = logger
 	for _, ip := range config.MonitorInfo.Hosts {
 		ip = strings.TrimSpace(ip)
 		cli, err := monitor.InitClient(ip)
 		if err != nil {
-			log.Printf("connect to host-%s occur error: %v ", ip, err)
+			logger.Printf("connect to host-%s occur error: %v ", ip, err)
 			continue
 		}
-		go monitor.Monitor(cli, ip)
+		go monitor.Monitor(cli, ip, logger)
 	}
 	go monitor.WriteAllHostInfo()
 
@@ -43,7 +50,6 @@ func parsePort() string {
 	flag.Parse()
 
 	_, err := strconv.Atoi(port)
-
 	if !strings.HasPrefix(port, ":") && err == nil {
 		return ":" + port
 	}

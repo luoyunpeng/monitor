@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"time"
 
 	"github.com/go-ini/ini"
@@ -29,6 +30,8 @@ type configure struct {
 	InfluxDBName     string
 	InfluxDBUser     string
 	InfluxDBPassword string
+
+	Logger *log.Logger
 }
 
 func Load() {

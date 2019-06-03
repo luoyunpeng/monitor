@@ -25,12 +25,8 @@ var (
 )
 
 // KeepStats keeps monitor all container of the given host
-func Monitor(dockerCli *client.Client, ip string) {
+func Monitor(dockerCli *client.Client, ip string, logger *log.Logger) {
 	ctx := context.Background()
-	logger := util.InitLog(ip)
-	if logger == nil {
-		return
-	}
 
 	dh := models.NewDockerHost(ip, logger)
 	dh.Cli = dockerCli
@@ -39,7 +35,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 	// waitFirst is a WaitGroup to wait first stat data's reach for each container
 	waitFirst := &sync.WaitGroup{}
 
-	logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
+	//logger.Println("ID  NAME  CPU %  MEM  USAGE / LIMIT  MEM %  NET I/O  BLOCK I/O READ-TIME")
 	// getContainerList simulates creation event for all previously existing
 	// containers (only used when calling `docker stats` without arguments).
 	getContainerList := func() {
@@ -48,7 +44,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 		}
 		cs, err := dockerCli.ContainerList(ctx, options)
 		if err != nil {
-			logger.Printf("err happen when get all running container: %v", err)
+			logger.Printf("[%s] err happen when get all running container: %v", ip, err)
 			return
 		}
 		for _, container := range cs {
@@ -68,7 +64,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 	eh := util.InitEventHandler()
 	eh.Handle("start", func(e events.Message) {
 		cms := models.NewCMetric(e.Actor.Attributes["name"], e.ID[:12])
-		logger.Printf("event handler: received %s-start event: %v", cms.ContainerName, e)
+		logger.Printf("[%s]  event handler: received %s-start event: %v", ip, cms.ContainerName, e)
 		if dh.Add(cms) {
 			waitFirst.Add(1)
 			go collect(cms, waitFirst, dh)
@@ -76,28 +72,28 @@ func Monitor(dockerCli *client.Client, ip string) {
 	})
 
 	eh.Handle("die", func(e events.Message) {
-		logger.Printf("event handler: received die event: %v", e)
+		logger.Printf("[%s]  event handler: received die event: %v", ip, e)
 		dh.Remove(e.ID[:12])
 		status, err := QueryContainerStatus(e.ID)
 		if err != nil {
-			logger.Printf("query container-%s status error %v", e.ID[:12], err)
+			logger.Printf("[%s]  query container-%s status error %v", ip, e.ID[:12], err)
 			return
 		}
 		if status == 0 {
-			logger.Printf("container-%s status has been 0, no need to change", e.ID[:12])
+			logger.Printf("[%s]  container-%s status has been 0, no need to change", ip, e.ID[:12])
 		} else if status == -100 {
-			logger.Printf("no found %s record in table", e.ID[:12])
+			logger.Printf("[%s]  no found %s record in table", ip, e.ID[:12])
 		} else {
 			if dh.IsValid() {
 				err := ChangeContainerStatus(e.ID, "0")
 				if err != nil {
-					logger.Printf("change container-%s status error %v", e.ID[:12], err)
+					logger.Printf("[%s]  change container-%s status error %v", ip, e.ID[:12], err)
 					return
 				}
-				logger.Printf("change container-%s status to 0", e.ID[:12])
+				logger.Printf("[%s]  change container-%s status to 0", ip, e.ID[:12])
 				return
 			}
-			logger.Printf("host-%s is down, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
+			logger.Printf("[%s]  docker down, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
 		}
 	})
 
@@ -111,7 +107,7 @@ func Monitor(dockerCli *client.Client, ip string) {
 	// containers.
 	getContainerList()
 	waitFirst.Wait()
-	logger.Println("container first collecting Done")
+	logger.Printf("[%s]  container first collecting Done", ip)
 }
 
 func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.DockerHost) {
@@ -161,7 +157,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				response, err := dh.Cli.ContainerStats(ctx, cm.ID, false)
 				if err != nil && strings.Contains(err.Error(), "No such container") {
-					log.Printf("container-%s die event happend after calling stats", cm.ID)
+					dh.Logger.Printf("[%s]  container-%s die event happend after calling stats", dh.GetIP(), cm.ID)
 					u <- errNoSuchC
 					return
 				} else if err != nil {
@@ -173,7 +169,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				errD := decoder.Decode(&statsJSON)
 				if errD != nil {
-					dh.Logger.Printf("Decode collecting stats for %s err occured: %v", cm.ContainerName, errD)
+					dh.Logger.Printf("[%s]  Decode collecting stats for %s err occured: %v", dh.GetIP(), cm.ContainerName, errD)
 				}
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
@@ -190,7 +186,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				if cm.ContainerName == "" && len(statsJSON.Name) >= 2 {
 					cm.ContainerName = statsJSON.Name[1:]
 				} else if len(statsJSON.Name) <= 2 {
-					dh.Logger.Printf("container-%s get short or zero len name-%s", cm.ID, statsJSON.Name)
+					dh.Logger.Printf("[%s]  container-%s get short or zero len name-%s", dh.GetIP(), cm.ID, statsJSON.Name)
 				}
 				if isFirstCollect {
 					//network io
@@ -236,7 +232,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 			if timeoutTimes == config.MonitorInfo.MaxTimeoutTimes {
 				_, err := dh.Cli.Ping(ctx)
 				if err != nil {
-					dh.Logger.Printf("time out for collecting "+cm.ContainerName+" reach the top times, err of Ping is: %v", err)
+					dh.Logger.Printf("[%s]  time out for collecting %s reach the top times, err of Ping is: %v", dh.GetIP(), cm.ContainerName, err)
 					dh.StopCollect()
 					t.Stop()
 					return
@@ -251,7 +247,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				waitFirst.Done()
 			}
 			timeoutTimes++
-			dh.Logger.Println("collect for container-"+cm.ContainerName, " time out for "+strconv.Itoa(timeoutTimes)+" times")
+			dh.Logger.Printf("[%s]  collect for container-%s time out for %d times", dh.GetIP(), cm.ContainerName, strconv.Itoa(timeoutTimes))
 			t.Reset(config.MonitorInfo.CollectTimeout)
 		case err := <-u:
 			//EOF error maybe mean docker daemon err
@@ -264,7 +260,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				t.Stop()
 				return
 			} else if err != nil && err == dockerDaemonErr {
-				dh.Logger.Printf("collecting stats from daemon for "+cm.ContainerName+" error occured: %v", err)
+				dh.Logger.Printf("[%s]  collecting stats daemon error occured: %v", dh.GetIP(), err)
 				dh.StopCollect()
 				t.Stop()
 				return
