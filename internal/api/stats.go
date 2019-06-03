@@ -277,7 +277,7 @@ func AddDockerhost(ctx *gin.Context) {
 	if !config.IsKnownHost(host) {
 		config.MonitorInfo.Hosts = append(config.MonitorInfo.Hosts, host)
 	}
-	go monitor.Monitor(cli, host)
+	go monitor.Monitor(cli, host, config.MonitorInfo.Logger)
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
