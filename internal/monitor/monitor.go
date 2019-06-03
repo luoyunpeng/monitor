@@ -174,14 +174,14 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
 				previousSystem = statsJSON.PreCPUStats.SystemUsage
-				cfm.CPUPercentage = util.CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
-				blkRead, blkWrite = util.CalculateBlockIO(statsJSON.BlkioStats)
+				cfm.CPUPercentage = models.CalculateCPUPercentUnix(previousCPU, previousSystem, statsJSON)
+				blkRead, blkWrite = models.CalculateBlockIO(statsJSON.BlkioStats)
 				// default mem related metric unit is MB
-				cfm.Memory = util.CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
+				cfm.Memory = models.CalculateMemUsageUnixNoCache(statsJSON.MemoryStats)
 				cfm.MemoryLimit = util.Round(float64(statsJSON.MemoryStats.Limit)/(1024*1024), 3)
-				cfm.MemoryPercentage = util.CalculateMemPercentUnixNoCache(cfm.MemoryLimit, cfm.Memory)
+				cfm.MemoryPercentage = models.CalculateMemPercentUnixNoCache(cfm.MemoryLimit, cfm.Memory)
 				cfm.PidsCurrent = statsJSON.PidsStats.Current
-				netRx, netTx := util.CalculateNetwork(statsJSON.Networks)
+				netRx, netTx := models.CalculateNetwork(statsJSON.Networks)
 
 				if cm.ContainerName == "" && len(statsJSON.Name) >= 2 {
 					cm.ContainerName = statsJSON.Name[1:]

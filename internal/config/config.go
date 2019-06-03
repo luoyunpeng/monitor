@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-ini/ini"
+	"github.com/luoyunpeng/monitor/internal/util"
 )
 
 var (
@@ -35,6 +36,20 @@ type configure struct {
 }
 
 func Load() {
+	isInContainer, err := util.IsInsideContainer()
+	if err != nil {
+		// do nothing, ignore error
+	}
+
+	if isInContainer {
+		log.Println("[config] monitor is running inside container")
+		defaultConfig()
+		return
+	}
+	loadFromConfigureFile()
+}
+
+func loadFromConfigureFile() {
 	cfg, err := ini.Load("monitor.ini")
 	if err != nil {
 		panic(err)
@@ -49,9 +64,35 @@ func Load() {
 	if MonitorInfo.CollectDuration < 30 || MonitorInfo.CollectDuration > 120 {
 		MonitorInfo.CollectDuration = 60
 	}
+	adaptConfigure()
+}
+
+func adaptConfigure() {
 	MonitorInfo.CollectDuration = MonitorInfo.CollectDuration * time.Second
 	MonitorInfo.CollectTimeout = MonitorInfo.CollectDuration + 10*time.Second
 	MonitorInfo.SqlHost = MonitorInfo.SqlHost + ":" + MonitorInfo.SqlPort
+}
+
+func defaultConfig() {
+	MonitorInfo = configure{
+		CacheNum:        15,
+		MaxTimeoutTimes: 5,
+		CollectDuration: 60,
+
+		Hosts:       []string{"localhost"},
+		SqlHost:     "localhost",
+		SqlPort:     "3306",
+		SqlDBName:   "blockchain_db",
+		SqlUser:     "root",
+		SqlPassword: "123",
+
+		InfluxDB:         "http://localhost:",
+		InfluxDBPort:     "8086",
+		InfluxDBName:     "docker",
+		InfluxDBUser:     "monitor",
+		InfluxDBPassword: "iscas123",
+	}
+	adaptConfigure()
 }
 
 func IsKnownHost(host string) bool {
