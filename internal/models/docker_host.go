@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -185,7 +185,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 	}
 
 	// Validate the destination path
-	if err := command.ValidateOutputPathFileMode(dstStat.Mode); err != nil {
+	if err := ValidateOutputPathFileMode(dstStat.Mode); err != nil {
 		return errors.New(fmt.Sprintf("destination %s:%s must be a directory or a regular file", destContainer, destPath))
 	}
 
@@ -199,6 +199,18 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 	}()
 	dh.Logger.Printf("copy file-%s to container-%s:%s in host-%s", name, destContainer, destPath, dh.ip)
 	return dh.Cli.CopyToContainer(ctx, destContainer, destPath, content, options)
+}
+
+// ValidateOutputPathFileMode validates the output paths of the `cp` command and serves as a
+// helper to `ValidateOutputPath`
+func ValidateOutputPathFileMode(fileMode os.FileMode) error {
+	switch {
+	case fileMode&os.ModeDevice != 0:
+		return errors.New("got a device")
+	case fileMode&os.ModeIrregular != 0:
+		return errors.New("got an irregular file")
+	}
+	return nil
 }
 
 // GetHostContainerInfo return Host's container info
