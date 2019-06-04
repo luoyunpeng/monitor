@@ -44,6 +44,7 @@ func Match(srcOrderInfo, destOrderInfo []OrderInfo) ([]MatchInfo, error) {
 		DestContainer: destOrderInfo[destMasterIndex].ContainerID,
 	})
 
+	// delete master info
 	srcOrderInfo = append(srcOrderInfo[:srcMasterIndex], srcOrderInfo[srcMasterIndex+1:]...)
 	destOrderInfo = append(destOrderInfo[:destMasterIndex], destOrderInfo[destMasterIndex+1:]...)
 

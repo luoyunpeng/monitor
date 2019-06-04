@@ -1,4 +1,4 @@
-package monitor
+package util
 
 import (
 	"bufio"
@@ -6,12 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 )
-
-// ReadLines reads contents from a file and splits them by new lines.
-// A convenience wrapper to ReadLinesOffsetN(filename, 0, -1).
-func ReadLines(filename string) ([]string, error) {
-	return ReadLinesOffsetN(filename, 0, -1)
-}
 
 // ReadLines reads contents from file and splits them by new line.
 // The offset tells at which line number to start.
