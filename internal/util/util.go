@@ -4,8 +4,6 @@ import (
 	"math"
 	"strings"
 	"unsafe"
-
-	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 func Bytes2str(b []byte) string {
@@ -38,23 +36,4 @@ func IsInsideContainer() (bool, error) {
 	}
 
 	return false, nil
-}
-
-// CheckParam
-func CheckParam(id, hostName string) string {
-	if len(id) == 0 || len(hostName) == 0 {
-		return "container id/name or host must given"
-	}
-
-	isHostKnown := false
-	for _, h := range config.MonitorInfo.Hosts {
-		if hostName == h {
-			isHostKnown = true
-		}
-	}
-
-	if !isHostKnown {
-		return "nknown host, please try again"
-	}
-	return ""
 }
