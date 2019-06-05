@@ -31,7 +31,7 @@ type RepMetric struct {
 func ContainerStats(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.Query("host")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSON(http.StatusNotFound, errInfo)
 		return
 	}
@@ -50,7 +50,7 @@ func ContainerStats(ctx *gin.Context) {
 func ContainerMem(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -81,7 +81,7 @@ func ContainerMem(ctx *gin.Context) {
 func ContainerMemPercent(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -113,7 +113,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 func ContainerMemLimit(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -143,7 +143,7 @@ func ContainerMemLimit(ctx *gin.Context) {
 func ContainerCPU(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -175,7 +175,7 @@ func ContainerCPU(ctx *gin.Context) {
 func ContainerNetworkIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -209,7 +209,7 @@ func ContainerNetworkIO(ctx *gin.Context) {
 func ContainerBlockIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
@@ -246,7 +246,7 @@ func ContainerInfo(ctx *gin.Context) {
 		Names []string
 	}{}
 	hostName := ctx.DefaultQuery("host", "")
-	if errInfo := checkParam("must", hostName); errInfo != "" {
+	if errInfo := util.CheckParam("must", hostName); errInfo != "" {
 		ctx.JSON(http.StatusNotFound, errInfo)
 		return
 	}
@@ -259,6 +259,7 @@ func ContainerInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cinfo)
 }
 
+// AddDockerhost add host that running docker with exposing port 2375 to the monitor list
 func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
@@ -281,6 +282,7 @@ func AddDockerhost(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
+// StopDockerHostCollect
 func StopDockerHostCollect(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
@@ -303,6 +305,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
 }
 
+// DownDockerHostInfo
 func DownDockerHostInfo(ctx *gin.Context) {
 	ips := models.AllStoppedDHIP()
 
@@ -312,6 +315,7 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
+// ContainerSliceCapDebug
 func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
@@ -329,6 +333,7 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "stopped host")
 }
 
+// CopyAcrossContainer for testing will rm
 func CopyAcrossContainer(ctx *gin.Context) {
 	fileName := ctx.Params.ByName("file")
 	destHost := ctx.DefaultQuery("host", "")
@@ -372,6 +377,7 @@ func CopyAcrossContainer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, "across containers copy ok")
 }
 
+// CopyAcrossContainer_order backup copying
 func CopyAcrossContainer_order(ctx *gin.Context) {
 	srcOrderId := ctx.DefaultQuery("srcOrder", "")
 	destOrderId := ctx.DefaultQuery("destOrder", "")
@@ -436,7 +442,7 @@ func ContainerLogs(ctx *gin.Context) {
 	}
 	defer ws.Close()
 
-	if errInfo := checkParam(id, hostName); errInfo != "" {
+	if errInfo := util.CheckParam(id, hostName); errInfo != "" {
 		err = ws.WriteMessage(1, util.Str2bytes(errInfo))
 		if err != nil {
 			log.Printf("err ccured when write check parameter error for access container log: %v", err)
@@ -511,21 +517,3 @@ func HostMemInfo(ctx *gin.Context) {
 	hostMemInfo.BufferAndCache = hostMemInfo.Available - hostMemInfo.Free
 	ctx.JSONP(http.StatusOK, hostMemInfo)
 }*/
-
-func checkParam(id, hostName string) string {
-	if len(id) == 0 || len(hostName) == 0 {
-		return "container id/name or host must given"
-	}
-
-	isHostKnown := false
-	for _, h := range config.MonitorInfo.Hosts {
-		if hostName == h {
-			isHostKnown = true
-		}
-	}
-
-	if !isHostKnown {
-		return "nknown host, please try again"
-	}
-	return ""
-}
