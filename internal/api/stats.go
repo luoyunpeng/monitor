@@ -259,6 +259,7 @@ func ContainerInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, cinfo)
 }
 
+// AddDockerhost add host that running docker with exposing port 2375 to the monitor list
 func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
@@ -281,6 +282,7 @@ func AddDockerhost(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
+// StopDockerHostCollect
 func StopDockerHostCollect(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
@@ -303,6 +305,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
 }
 
+// DownDockerHostInfo
 func DownDockerHostInfo(ctx *gin.Context) {
 	ips := models.AllStoppedDHIP()
 
@@ -312,6 +315,7 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
+// ContainerSliceCapDebug
 func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
@@ -329,6 +333,7 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "stopped host")
 }
 
+// CopyAcrossContainer for testing will rm
 func CopyAcrossContainer(ctx *gin.Context) {
 	fileName := ctx.Params.ByName("file")
 	destHost := ctx.DefaultQuery("host", "")
@@ -372,6 +377,7 @@ func CopyAcrossContainer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, "across containers copy ok")
 }
 
+// CopyAcrossContainer_order backup copying
 func CopyAcrossContainer_order(ctx *gin.Context) {
 	srcOrderId := ctx.DefaultQuery("srcOrder", "")
 	destOrderId := ctx.DefaultQuery("destOrder", "")
@@ -512,6 +518,7 @@ func HostMemInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, hostMemInfo)
 }*/
 
+// checkParam
 func checkParam(id, hostName string) string {
 	if len(id) == 0 || len(hostName) == 0 {
 		return "container id/name or host must given"

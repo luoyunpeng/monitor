@@ -22,6 +22,7 @@ func Round(f float64, n int) float64 {
 	return math.Trunc((f+0.5/pow10N)*pow10N) / pow10N
 }
 
+// IsInsideContainer check if monitor is running inside container
 func IsInsideContainer() (bool, error) {
 	lines, err := ReadLinesOffsetN("/proc/1/cgroup", 0, -1)
 	if err != nil {
