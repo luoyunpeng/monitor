@@ -291,14 +291,12 @@ func StopDockerHostCollect(ctx *gin.Context) {
 		return
 	}
 
-	if hoststackTmp, ok := models.DockerHostCache.Load(host); ok {
-		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
-			dh.StopCollect()
-			time.Sleep(1 * time.Millisecond)
-			if models.GetHostContainerInfo(host) == nil {
-				ctx.JSONP(http.StatusOK, "successfully stopped")
-				return
-			}
+	if dh, err := models.GetDockerHost(host); err == nil {
+		dh.StopCollect()
+		time.Sleep(1 * time.Millisecond)
+		if models.GetHostContainerInfo(host) == nil {
+			ctx.JSONP(http.StatusOK, "successfully stopped")
+			return
 		}
 	}
 
@@ -324,11 +322,9 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 		return
 	}
 
-	if hoststackTmp, ok := models.DockerHostCache.Load(host); ok {
-		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
-			ctx.JSONP(http.StatusOK, dh.Length())
-			return
-		}
+	if dh, err := models.GetDockerHost(host); err == nil {
+		ctx.JSONP(http.StatusOK, dh.Length())
+		return
 	}
 	ctx.JSONP(http.StatusNotFound, "stopped host")
 }
@@ -414,7 +410,7 @@ var upGrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// ContainerLogs handles GET requests on /container/logs?host=<hostName>&id=<containerID>
+// ContainerLogs handles GET requests on /container/logs/id?host=<hostName>&size=<logSize>
 // if id (container id or name) and host is present, response real time container log for the container
 // if id (container id or name) and host is not present, response "no such container error"
 func ContainerLogs(ctx *gin.Context) {
@@ -450,8 +446,8 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	value, isLoaded := models.DockerHostCache.Load(hostName)
-	if dh, ok := value.(*models.DockerHost); isLoaded && ok && dh.IsValid() {
+	dh, err := models.GetDockerHost(hostName)
+	if err == nil && dh.IsValid() {
 		logBody, err := dh.Cli.ContainerLogs(context.Background(), id, logOptions)
 		if err != nil {
 			err = ws.WriteMessage(1, []byte(err.Error()))
@@ -482,11 +478,41 @@ func ContainerLogs(ctx *gin.Context) {
 				return
 			}
 		}
-	} else {
-		errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the ip/host"))
-		if errLoad != nil {
-			log.Printf("err occured when write load err log to websocket client: %v", errLoad)
-		}
+	}
+
+	errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the ip/host"))
+	if errLoad != nil {
+		log.Printf("err occured when write load err log to websocket client: %v", errLoad)
+	}
+}
+
+// ContainerConsole handles GET requests on /container/console/id?host=<hostName>&cmd=</bin/bash>
+func ContainerConsole(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	cmd := ctx.DefaultQuery("cmd", "/bin/bash")
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		return
+	}
+
+	dh, err := models.GetDockerHost(hostName)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	// upgrade http-Get to WebSocket
+	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	defer ws.Close()
+
+	err = dh.ContainerConsole(context.Background(), ws, id, cmd)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 }

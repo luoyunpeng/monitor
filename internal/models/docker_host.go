@@ -1,19 +1,23 @@
 package models
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/internal/config"
 )
 
@@ -201,6 +205,108 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 	return dh.Cli.CopyToContainer(ctx, destContainer, destPath, content, options)
 }
 
+// ContainerConsole container console
+func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *websocket.Conn, container, cmd string) error {
+	rsp, err := dh.Cli.ContainerExecCreate(ctx, container, types.ExecConfig{
+		AttachStderr: true,
+		AttachStdin:  true,
+		AttachStdout: true,
+		Cmd:          []string{cmd},
+		Detach:       false,
+		DetachKeys:   "",
+		Privileged:   false,
+		Tty:          true,
+		User:         "",
+		WorkingDir:   "",
+	})
+	if err != nil {
+		return err
+	}
+	execId := rsp.ID
+	HijackedResp, err := dh.Cli.ContainerExecAttach(ctx, execId, types.ExecStartCheck{Tty: true, Detach: false})
+	if err != nil {
+		return err
+	}
+	defer HijackedResp.Close()
+
+	erre := hijackRequest(websocketConn, HijackedResp)
+	if erre != nil {
+		return err
+	}
+
+	return nil
+}
+
+// hijackRequest manage the tcp connection
+func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) error {
+	tcpConn, brw := resp.Conn, resp.Reader
+	defer tcpConn.Close()
+
+	errorChan := make(chan error, 1)
+	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan)
+	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan)
+
+	err := <-errorChan
+	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
+		return err
+	}
+
+	return nil
+}
+
+// streamFromWebsocketConnToTCPConn
+func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error) {
+	for {
+		_, in, err := websocketConn.ReadMessage()
+		if err != nil {
+			errorChan <- err
+			break
+		}
+
+		_, err = tcpConn.Write(in)
+		if err != nil {
+			errorChan <- err
+			break
+		}
+	}
+}
+
+// streamFromTCPConnToWebsocketConn
+func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error) {
+	for {
+		out := make([]byte, 1024)
+		_, err := br.Read(out)
+		if err != nil {
+			errorChan <- err
+			break
+		}
+
+		processedOutput := validString(string(out[:]))
+		err = websocketConn.WriteMessage(websocket.TextMessage, []byte(processedOutput))
+		if err != nil {
+			errorChan <- err
+			break
+		}
+	}
+}
+
+func validString(s string) string {
+	if !utf8.ValidString(s) {
+		v := make([]rune, 0, len(s))
+		for i, r := range s {
+			if r == utf8.RuneError {
+				_, size := utf8.DecodeRuneInString(s[i:])
+				if size == 1 {
+					continue
+				}
+			}
+			v = append(v, r)
+		}
+		s = string(v)
+	}
+	return s
+}
+
 // ValidateOutputPathFileMode validates the output paths of the `cp` command and serves as a
 // helper to `ValidateOutputPath`
 func ValidateOutputPathFileMode(fileMode os.FileMode) error {
@@ -215,12 +321,8 @@ func ValidateOutputPathFileMode(fileMode os.FileMode) error {
 
 // GetHostContainerInfo return Host's container info
 func GetHostContainerInfo(ip string) []string {
-	if hoststackTmp, ok := DockerHostCache.Load(ip); ok {
-		if dh, ok := hoststackTmp.(*DockerHost); ok {
-			if dh.GetIP() == ip {
-				return dh.AllNames()
-			}
-		}
+	if dh, err := GetDockerHost(ip); err == nil {
+		return dh.AllNames()
 	}
 
 	return nil
