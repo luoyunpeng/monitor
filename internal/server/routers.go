@@ -19,6 +19,7 @@ func registerRoutes(app *gin.Engine) {
 		v1.GET("/container/metric/blockio/:id", api.ContainerBlockIO)
 		v1.GET("/container/info", api.ContainerInfo)
 		v1.GET("/container/logs/:id", api.ContainerLogs)
+		v1.GET("/container/console/:id", api.ContainerConsole)
 
 		v1.GET("/dockerd/add/:host", api.AddDockerhost)
 		v1.GET("/dockerd/remove/:host", api.StopDockerHostCollect)
