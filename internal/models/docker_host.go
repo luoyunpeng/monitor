@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -213,7 +214,7 @@ func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *webso
 		AttachStdout: true,
 		Cmd:          []string{cmd},
 		Detach:       false,
-		DetachKeys:   "",
+		DetachKeys:   "ctrl-p,ctrl-q",
 		Privileged:   false,
 		Tty:          true,
 		User:         "",
@@ -243,8 +244,9 @@ func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) e
 	defer tcpConn.Close()
 
 	errorChan := make(chan error, 1)
-	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan)
-	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan)
+	cmdChan := make(chan string, 1)
+	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan, cmdChan)
+	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan, cmdChan)
 
 	err := <-errorChan
 	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
@@ -255,14 +257,17 @@ func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) e
 }
 
 // streamFromWebsocketConnToTCPConn
-func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error) {
+func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error, cmdChan chan<- string) {
 	for {
 		_, in, err := websocketConn.ReadMessage()
 		if err != nil {
 			errorChan <- err
 			break
 		}
-
+		cmdChan <- string(in[:])
+		if !strings.HasSuffix(string(in), "\n") {
+			in = append(in, []byte("\n")...)
+		}
 		_, err = tcpConn.Write(in)
 		if err != nil {
 			errorChan <- err
@@ -272,16 +277,20 @@ func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net
 }
 
 // streamFromTCPConnToWebsocketConn
-func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error) {
+func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error, cmdChan <-chan string) {
 	for {
 		out := make([]byte, 1024)
-		_, err := br.Read(out)
+		n, err := br.Read(out)
 		if err != nil {
 			errorChan <- err
 			break
 		}
 
-		processedOutput := validString(string(out[:]))
+		processedOutput := validString(string(out[:n]))
+		cmd := <-cmdChan
+		if strings.TrimSpace(cmd) == strings.TrimSpace(processedOutput) {
+			continue
+		}
 		err = websocketConn.WriteMessage(websocket.TextMessage, []byte(processedOutput))
 		if err != nil {
 			errorChan <- err
