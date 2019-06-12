@@ -244,9 +244,8 @@ func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) e
 	defer tcpConn.Close()
 
 	errorChan := make(chan error, 1)
-	cmdChan := make(chan string, 1)
-	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan, cmdChan)
-	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan, cmdChan)
+	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan)
+	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan)
 
 	err := <-errorChan
 	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
@@ -257,14 +256,13 @@ func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) e
 }
 
 // streamFromWebsocketConnToTCPConn
-func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error, cmdChan chan<- string) {
+func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error) {
 	for {
 		_, in, err := websocketConn.ReadMessage()
 		if err != nil {
 			errorChan <- err
 			break
 		}
-		cmdChan <- string(in[:])
 		if !strings.HasSuffix(string(in), "\n") {
 			in = append(in, []byte("\n")...)
 		}
@@ -277,7 +275,7 @@ func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net
 }
 
 // streamFromTCPConnToWebsocketConn
-func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error, cmdChan <-chan string) {
+func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error) {
 	for {
 		out := make([]byte, 1024)
 		n, err := br.Read(out)
@@ -287,10 +285,6 @@ func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.R
 		}
 
 		processedOutput := validString(string(out[:n]))
-		cmd := <-cmdChan
-		if strings.TrimSpace(cmd) == strings.TrimSpace(processedOutput) {
-			continue
-		}
 		err = websocketConn.WriteMessage(websocket.TextMessage, []byte(processedOutput))
 		if err != nil {
 			errorChan <- err
