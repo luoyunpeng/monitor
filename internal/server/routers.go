@@ -25,6 +25,7 @@ func registerRoutes(app *gin.Engine) {
 		v1.GET("/dockerd/remove/:host", api.StopDockerHostCollect)
 		v1.GET("/dockerd/down/", api.DownDockerHostInfo)
 		v1.GET("/container/debug/slicecap/:host", api.ContainerSliceCapDebug)
+		v1.GET("/container/all", api.AllDockerHostInfo)
 
 		v1.GET("/containerfile/copy/", api.CopyAcrossContainer)
 	}

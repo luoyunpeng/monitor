@@ -274,6 +274,7 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
+	//
 	models.StoppedDockerHost.Delete(host)
 	if !config.IsKnownHost(host) {
 		config.MonitorInfo.Hosts = append(config.MonitorInfo.Hosts, host)
@@ -311,6 +312,11 @@ func DownDockerHostInfo(ctx *gin.Context) {
 		Len int
 		IPS []string
 	}{Len: len(ips), IPS: ips})
+}
+
+// AllDockerHostInfo
+func AllDockerHostInfo(ctx *gin.Context) {
+	ctx.JSONP(http.StatusOK, config.MonitorInfo.Hosts)
 }
 
 // ContainerSliceCapDebug
@@ -512,6 +518,7 @@ func ContainerConsole(ctx *gin.Context) {
 
 	err = dh.ContainerConsole(context.Background(), ws, id, cmd)
 	if err != nil {
+		log.Println("[container console err]", err)
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
