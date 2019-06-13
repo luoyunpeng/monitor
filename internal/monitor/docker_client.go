@@ -2,10 +2,10 @@ package monitor
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/docker/docker/client"
+	"github.com/luoyunpeng/monitor/internal/config"
 )
 
 var (
@@ -21,11 +21,11 @@ func InitClient(ip string) (*client.Client, error) {
 	)
 	if ip == "localhost" {
 		cli, err = client.NewClientWithOpts(client.FromEnv, client.WithVersion(defaultVersion))
-		log.Println("[ monitor ]  init docker client from env for localhost")
+		config.MonitorInfo.Logger.Println("[docker_client]  init docker client from env for localhost")
 	} else {
 		realURL := strings.Replace(hostURL, "ip", ip, 1)
 		cli, err = client.NewClientWithOpts(client.WithHost(realURL), client.WithVersion(defaultVersion))
-		log.Println("[ monitor ]  init docker client from remote ip: ", ip)
+		config.MonitorInfo.Logger.Printf("[docker_client]  init docker client from remote ip: %s", ip)
 	}
 
 	if err != nil {
