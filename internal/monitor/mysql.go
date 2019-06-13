@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"database/sql"
-	"log"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/luoyunpeng/monitor/internal/config"
@@ -33,7 +32,7 @@ func InitMysql() error {
 	dbName = config.MonitorInfo.SqlDBName
 
 	dataSource := dbUser + ":" + dbPassword + "@tcp(" + dbHost + ")/" + dbName + "?charset=utf8"
-	log.Println("[MySQL] init mysql: ", dataSource)
+	config.MonitorInfo.Logger.Println("[MySQL] init mysql: ", dataSource)
 	db, err = sql.Open("mysql", dataSource)
 	if err != nil {
 		return err

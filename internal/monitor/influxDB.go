@@ -26,7 +26,7 @@ func initInfluxCli() {
 	var err error
 	conf := config.MonitorInfo
 	f := "[InfluxDB] init influxCli from addr-%s, db: %s ,user: %s, password: %s"
-	log.Printf(f, conf.InfluxDB+conf.InfluxDBPort, conf.InfluxDBName, conf.InfluxDBUser, conf.InfluxDBPassword)
+	conf.Logger.Printf(f, conf.InfluxDB+conf.InfluxDBPort, conf.InfluxDBName, conf.InfluxDBUser, conf.InfluxDBPassword)
 	influCli, err = client.NewHTTPClient(client.HTTPConfig{
 		Addr:     conf.InfluxDB + conf.InfluxDBPort,
 		Username: conf.InfluxDBUser,
