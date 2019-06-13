@@ -111,6 +111,7 @@ func defaultConfig() {
 		InfluxDBName:     "docker",
 		InfluxDBUser:     "monitor",
 		InfluxDBPassword: "iscas123",
+		Logger:           MonitorInfo.Logger,
 	}
 	adaptConfigure()
 }
