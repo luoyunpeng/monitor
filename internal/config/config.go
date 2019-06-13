@@ -49,7 +49,7 @@ func Load() {
 	}
 
 	if isInContainer {
-		log.Println("[config] monitor is running inside container")
+		logger.Println("[config] monitor is running inside container")
 		defaultConfig()
 		logConfigure()
 		return
