@@ -11,7 +11,6 @@ import (
 	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/monitor"
 	"github.com/luoyunpeng/monitor/internal/server"
-	"github.com/luoyunpeng/monitor/internal/util"
 )
 
 var (
@@ -20,21 +19,14 @@ var (
 
 func main() {
 	config.Load()
-
-	//global logger
-	logger := util.InitLog("global")
-	if logger == nil {
-		panic("global logger nil")
-	}
-	config.MonitorInfo.Logger = logger
 	for _, ip := range config.MonitorInfo.Hosts {
 		ip = strings.TrimSpace(ip)
 		cli, err := monitor.InitClient(ip)
 		if err != nil {
-			logger.Printf("connect to host-%s occur error: %v ", ip, err)
+			config.MonitorInfo.Logger.Printf("connect to host-%s occur error: %v ", ip, err)
 			continue
 		}
-		go monitor.Monitor(cli, ip, logger)
+		go monitor.Monitor(cli, ip, config.MonitorInfo.Logger)
 	}
 	go monitor.WriteAllHostInfo()
 
