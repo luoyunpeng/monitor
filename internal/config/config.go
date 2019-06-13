@@ -36,6 +36,13 @@ type configure struct {
 }
 
 func Load() {
+	//global logger
+	logger := util.InitLog("global")
+	if logger == nil {
+		panic("global logger nil")
+	}
+	MonitorInfo.Logger = logger
+
 	isInContainer, err := util.IsInsideContainer()
 	if err != nil {
 		// do nothing, ignore error
@@ -44,9 +51,22 @@ func Load() {
 	if isInContainer {
 		log.Println("[config] monitor is running inside container")
 		defaultConfig()
+		logConfigure()
 		return
 	}
 	loadFromConfigureFile()
+}
+
+func logConfigure() {
+	timeF := "\nCacheNum: %d\nMaxTimeoutTimes: %d\nCollectDuration: %v\nCollectTimeout: %v\n"
+	hostF := "Hosts: %s\n"
+	sqlF := "SqlHost: %s\nSqlDBName: %s\nSqlUser/password: %s\n"
+	influxF := "InfluxDB: %s\nInfluxDBName: %s\nInfluxUser/Password: %s"
+	MonitorInfo.Logger.Printf(timeF+hostF+sqlF+influxF,
+		MonitorInfo.CacheNum, MonitorInfo.MaxTimeoutTimes, MonitorInfo.CollectDuration, MonitorInfo.CollectTimeout,
+		MonitorInfo.Hosts,
+		MonitorInfo.SqlHost, MonitorInfo.SqlDBName, MonitorInfo.SqlUser+"/"+MonitorInfo.SqlPassword,
+		MonitorInfo.InfluxDB+MonitorInfo.InfluxDBPort, MonitorInfo.InfluxDBName, MonitorInfo.InfluxDBUser+"/"+MonitorInfo.InfluxDBPassword)
 }
 
 func loadFromConfigureFile() {

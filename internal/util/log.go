@@ -6,7 +6,7 @@ import (
 )
 
 func InitLog(ip string) *log.Logger {
-	file, err := os.OpenFile(ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile("/var/log/monitor/"+ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("Failed to open error log file: %v", err)
 		return nil
