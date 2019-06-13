@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/luoyunpeng/monitor/internal/config"
+	"github.com/luoyunpeng/monitor/internal/models"
 	"github.com/luoyunpeng/monitor/internal/monitor"
 	"github.com/luoyunpeng/monitor/internal/server"
 )
@@ -24,6 +25,7 @@ func main() {
 		cli, err := monitor.InitClient(ip)
 		if err != nil {
 			config.MonitorInfo.Logger.Printf("connect to host-%s occur error: %v ", ip, err)
+			models.StoppedDockerHost.Store(ip, struct{}{})
 			continue
 		}
 		go monitor.Monitor(cli, ip, config.MonitorInfo.Logger)
