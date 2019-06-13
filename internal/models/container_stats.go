@@ -88,7 +88,7 @@ func (cm *ContainerStats) GetLatestMemory() float64 {
 		return cm.ReadAbleMetrics[len(cm.ReadAbleMetrics)-1].Memory
 	}
 
-	return cm.ReadAbleMetrics[0].Memory
+	return 0
 }
 
 func (cm *ContainerStats) IsInValid() bool {
