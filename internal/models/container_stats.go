@@ -82,10 +82,13 @@ func (cm *ContainerStats) Read(num int) []ParsedConatinerMetric {
 
 func (cm *ContainerStats) GetLatestMemory() float64 {
 	cm.RLock()
-	latestMem := cm.ReadAbleMetrics[len(cm.ReadAbleMetrics)-1].Memory
-	cm.RUnlock()
+	defer cm.RUnlock()
 
-	return latestMem
+	if len(cm.ReadAbleMetrics) >= 1 {
+		return cm.ReadAbleMetrics[len(cm.ReadAbleMetrics)-1].Memory
+	}
+
+	return cm.ReadAbleMetrics[0].Memory
 }
 
 func (cm *ContainerStats) IsInValid() bool {
