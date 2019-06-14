@@ -72,7 +72,7 @@ func (dh *DockerHost) StopCollect() {
 		}
 		close(dh.Done)
 		dh.closed = true
-		dh.Logger.Println("stop all container collect")
+		dh.Logger.Printf("[%s] stop all container collect", dh.ip)
 		StoppedDockerHost.Store(dh.ip, struct{}{})
 	}
 	dh.Unlock()
@@ -141,7 +141,7 @@ func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct
 	defer func() {
 		close(c)
 		if dh.Cli != nil {
-			dh.Logger.Println("close docker-cli and remove it from DockerCliList and host list")
+			dh.Logger.Printf("[%s] close docker-cli and remove it from DockerCliList and host list", dh.ip)
 			DockerHostCache.Delete(dh.ip)
 			dh.Cli.Close()
 		}
@@ -165,7 +165,7 @@ func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct
 		case event := <-eventq:
 			c <- event
 		case err := <-errq:
-			dh.Logger.Printf("host: err happen when listen docker event: %v", err)
+			dh.Logger.Printf("[%s] listen docker event occured error : %v", dh.ip, err)
 			dh.StopCollect()
 			return
 		case <-dh.Done:
@@ -179,7 +179,7 @@ func (dh *DockerHost) CopyFromContainer(ctx context.Context, srcContainer, srcPa
 	if err != nil {
 		return nil, "", err
 	}
-	dh.Logger.Printf("copy file-%s with size-%d, from container-%s in host-%s", srcPath, stat.Size, srcContainer, dh.ip)
+	dh.Logger.Printf("[%s] copy file-%s with size-%d, from container-%s", dh.ip, srcPath, stat.Size, srcContainer)
 	return content, stat.Name, nil
 }
 
@@ -191,7 +191,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 
 	// Validate the destination path
 	if err := ValidateOutputPathFileMode(dstStat.Mode); err != nil {
-		return errors.New(fmt.Sprintf("destination %s:%s must be a directory or a regular file", destContainer, destPath))
+		return errors.New(fmt.Sprintf("[%s] destination %s:%s must be a directory or a regular file", dh.ip, destContainer, destPath))
 	}
 
 	options := types.CopyToContainerOptions{
@@ -202,7 +202,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 		content.Close()
 		content = nil
 	}()
-	dh.Logger.Printf("copy file-%s to container-%s:%s in host-%s", name, destContainer, destPath, dh.ip)
+	dh.Logger.Printf("[%s] copy file-%s to container-%s:%s", dh.ip, name, destContainer, destPath)
 	return dh.Cli.CopyToContainer(ctx, destContainer, destPath, content, options)
 }
 
