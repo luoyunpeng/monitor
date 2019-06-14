@@ -369,7 +369,6 @@ func WriteAllHostInfo() {
 	tags := map[string]string{
 		"ALL": "all",
 	}
-	logger := util.InitLog("all-host")
 
 	ticker := time.NewTicker(5 * config.MonitorInfo.CollectDuration)
 	defer ticker.Stop()
@@ -386,7 +385,7 @@ func WriteAllHostInfo() {
 			if dh, ok := value.(*models.DockerHost); ok && dh.IsValid() {
 				info, infoErr = dh.Cli.Info(ctx)
 				if infoErr != nil {
-					logger.Printf("%s get docker info error occured: %v", dh.GetIP(), infoErr)
+					config.MonitorInfo.Logger.Printf("[all-host] get docker-%s info occured error: %v", dh.GetIP(), infoErr)
 					return true
 				}
 				runningDockerHost++
@@ -409,7 +408,7 @@ func WriteAllHostInfo() {
 			return true
 		})
 		if runningDockerHost == 0 {
-			logger.Println("no more docker daemon is running, return store all host info to influxDB")
+			config.MonitorInfo.Logger.Println("[all-host] no more docker daemon is running, return store all host info to influxDB")
 			return
 		}
 		fields["hostNum"] = len(config.MonitorInfo.Hosts)
@@ -420,7 +419,7 @@ func WriteAllHostInfo() {
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 
 		createMetricAndWrite(measurement, tags, fields, time.Now())
-		logger.Printf("write all host info: %d, %d, %d, %d, %d, %d",
+		config.MonitorInfo.Logger.Printf("[all-host] write all host info: %d, %d, %d, %d, %d, %d",
 			fields["hostNum"], runningDockerHost, fields["dockerdDead"], totalContainer,
 			totalRunningContainer, fields["totalStopped"])
 	}
