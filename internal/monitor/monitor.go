@@ -299,7 +299,7 @@ func RecoveryStopped() {
 			//
 			models.StoppedDockerHost.Delete(host)
 			go Monitor(cli, host, config.MonitorInfo.Logger)
-			config.MonitorInfo.Logger.Printf("[recovery-stopped] host-%s recoveyed", key)
+			config.MonitorInfo.Logger.Printf("[recovery-stopped] host-%s recoveryed", key)
 			return true
 		})
 	}
