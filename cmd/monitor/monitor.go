@@ -31,7 +31,7 @@ func main() {
 		go monitor.Monitor(cli, ip, config.MonitorInfo.Logger)
 	}
 	go monitor.WriteAllHostInfo()
-
+	go monitor.RecoveryStopped()
 	//for profiling
 	go func() {
 		log.Println(http.ListenAndServe(":8070", nil))

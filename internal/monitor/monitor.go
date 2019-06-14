@@ -283,6 +283,28 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 	}
 }
 
+// RecoveryStopped range the stopped cache list on time, recovery the stopped host
+func RecoveryStopped() {
+	ticker := time.NewTicker(config.MonitorInfo.CollectDuration)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		models.StoppedDockerHost.Range(func(key, value interface{}) bool {
+			host, _ := key.(string)
+			cli, err := InitClient(host)
+			if err != nil {
+				config.MonitorInfo.Logger.Printf("[recovery-stopped] host-%s init client error : %v", key, err.Error())
+				return true
+			}
+			//
+			models.StoppedDockerHost.Delete(host)
+			go Monitor(cli, host, config.MonitorInfo.Logger)
+			config.MonitorInfo.Logger.Printf("[recovery-stopped] host-%s recoveyed", key)
+			return true
+		})
+	}
+}
+
 // WriteMetricToInfluxDB write docker container metric to influxDB
 func WriteMetricToInfluxDB(host, containerName string, containerMetrics models.ParsedConatinerMetric) {
 	measurement := "container"
