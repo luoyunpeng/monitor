@@ -63,7 +63,7 @@ spec:
         kubernetes.io/hostname: repchain-node1
       containers:
       - name: monitor
-        image: monitor:0.7
+        image: monitor:1.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: metric-api
