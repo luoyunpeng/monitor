@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -386,6 +387,7 @@ func WriteAllHostInfo() {
 		hostInfo                                                 singleHostInfo
 
 		infoErr error
+		oldInfo string
 	)
 	fields := make(map[string]interface{}, 6)
 	tags := map[string]string{
@@ -441,9 +443,18 @@ func WriteAllHostInfo() {
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 
 		createMetricAndWrite(measurement, tags, fields, time.Now())
-		config.MonitorInfo.Logger.Printf("[all-host] write all host info: %d, %d, %d, %d, %d, %d",
+		info := fmt.Sprintf("[all-host] write all host info: %d, %d, %d, %d, %d, %d",
 			fields["hostNum"], runningDockerHost, fields["dockerdDead"], totalContainer,
 			totalRunningContainer, fields["totalStopped"])
+		if oldInfo == "" {
+			oldInfo = info
+			config.MonitorInfo.Logger.Printf(info)
+			continue
+		} else if oldInfo == info {
+			continue
+		}
+		config.MonitorInfo.Logger.Printf(info)
+		oldInfo = info
 	}
 }
 

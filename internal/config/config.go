@@ -58,11 +58,13 @@ func Load() {
 }
 
 func logConfigure() {
-	timeF := "\nCacheNum: %d\nMaxTimeoutTimes: %d\nCollectDuration: %v\nCollectTimeout: %v\n"
+	startF := "\n******      monitor configure      ******\n"
+	timeF := "CacheNum: %d\nMaxTimeoutTimes: %d\nCollectDuration: %v\nCollectTimeout: %v\n"
 	hostF := "Hosts: %s\n"
 	sqlF := "SqlHost: %s\nSqlDBName: %s\nSqlUser/password: %s\n"
 	influxF := "InfluxDB: %s\nInfluxDBName: %s\nInfluxUser/Password: %s"
-	MonitorInfo.Logger.Printf(timeF+hostF+sqlF+influxF,
+	endF := "\n*******************************************"
+	MonitorInfo.Logger.Printf(startF+timeF+hostF+sqlF+influxF+endF,
 		MonitorInfo.CacheNum, MonitorInfo.MaxTimeoutTimes, MonitorInfo.CollectDuration, MonitorInfo.CollectTimeout,
 		MonitorInfo.Hosts,
 		MonitorInfo.SqlHost, MonitorInfo.SqlDBName, MonitorInfo.SqlUser+"/"+MonitorInfo.SqlPassword,
