@@ -6,6 +6,6 @@ go:
 os:
   - linux
 
-script: go build -tags=jsoniter  -o monitor ./cmd/monitor/monitor.go
+script: make
 notifications:
   email: false
