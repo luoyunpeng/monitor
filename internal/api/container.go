@@ -520,7 +520,6 @@ func ContainerConsole(ctx *gin.Context) {
 	if err != nil {
 		log.Println("[container console err]", err)
 		ctx.JSON(http.StatusNotFound, err.Error())
-		return
 	}
 }
 

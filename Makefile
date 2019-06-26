@@ -28,3 +28,5 @@ build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_UNIX) -v
 docker-build:
 	docker run --rm -it -v "$(GOPATH)":/go -w /go/src/github.com/luoyunpeng/monitor golang:1.12.6-alpine go build -v -tags=jsoniter -o "$(BINARY_NAME)" ./cmd/monitor/monitor.go
+image-build: docker-build
+	docker build -t monitor:2.0 .
