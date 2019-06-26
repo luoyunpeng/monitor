@@ -237,12 +237,10 @@ func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *webso
 	defer HijackedResp.Close()
 
 	dh.Logger.Printf("[%s] web console connect to %s  with execId-%s", dh.ip, container, execId)
-	erre := dh.hijackRequest(websocketConn, HijackedResp)
+	errHijack := dh.hijackRequest(websocketConn, HijackedResp)
 	dh.Logger.Printf("[%s] web console disconnect to %s  with execId-%s", dh.ip, container, execId)
-	if erre != nil {
-		return err
-	}
-	return nil
+
+	return errHijack
 }
 
 // hijackRequest manage the tcp connection
@@ -273,7 +271,6 @@ func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net
 		_, in, err := websocketConn.ReadMessage()
 		if err != nil {
 			tcpConn.Write([]byte("exit\n"))
-
 			errorChan <- err
 			break
 		}
