@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -208,48 +207,61 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 
 // ContainerConsole container console
 func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *websocket.Conn, container, cmd string) error {
-	rsp, err := dh.Cli.ContainerExecCreate(ctx, container, types.ExecConfig{
+	cli := dh.Cli
+	// before do ContainerExecCreate, check the container status, in case of  leaking execIDs
+	if _, err := cli.ContainerInspect(ctx, container); err != nil {
+		return err
+	}
+
+	rsp, err := cli.ContainerExecCreate(ctx, container, types.ExecConfig{
 		AttachStderr: true,
 		AttachStdin:  true,
 		AttachStdout: true,
 		Cmd:          []string{cmd},
 		Detach:       false,
-		DetachKeys:   "ctrl-p,ctrl-q",
+		DetachKeys:   "",
 		Privileged:   false,
 		Tty:          true,
 		User:         "",
 		WorkingDir:   "",
 	})
+
 	if err != nil {
 		return err
 	}
 	execId := rsp.ID
-	HijackedResp, err := dh.Cli.ContainerExecAttach(ctx, execId, types.ExecStartCheck{Tty: true, Detach: false})
+	HijackedResp, err := cli.ContainerExecAttach(ctx, execId, types.ExecStartCheck{Tty: true, Detach: false})
 	if err != nil {
 		return err
 	}
 	defer HijackedResp.Close()
 
-	erre := hijackRequest(websocketConn, HijackedResp)
+	dh.Logger.Printf("[%s] web console connect to %s  with execId-%s", dh.ip, container, execId)
+	erre := dh.hijackRequest(websocketConn, HijackedResp)
+	dh.Logger.Printf("[%s] web console disconnect to %s  with execId-%s", dh.ip, container, execId)
 	if erre != nil {
 		return err
 	}
-
 	return nil
 }
 
 // hijackRequest manage the tcp connection
-func hijackRequest(websocketConn *websocket.Conn, resp types.HijackedResponse) error {
-	tcpConn, brw := resp.Conn, resp.Reader
+func (dh *DockerHost) hijackRequest(websocketConn *websocket.Conn, HijackedResp types.HijackedResponse) error {
+	tcpConn, brw := HijackedResp.Conn, HijackedResp.Reader
+	defer HijackedResp.CloseWrite()
 	defer tcpConn.Close()
 
 	errorChan := make(chan error, 1)
 	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan)
 	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan)
 
-	err := <-errorChan
-	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
-		return err
+	select {
+	case err := <-errorChan:
+		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
+			return err
+		}
+	case <-dh.Done:
+		tcpConn.Write([]byte("exit\n"))
 	}
 
 	return nil
@@ -260,11 +272,10 @@ func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net
 	for {
 		_, in, err := websocketConn.ReadMessage()
 		if err != nil {
+			tcpConn.Write([]byte("exit\n"))
+
 			errorChan <- err
 			break
-		}
-		if !strings.HasSuffix(string(in), "\n") {
-			in = append(in, []byte("\n")...)
 		}
 		_, err = tcpConn.Write(in)
 		if err != nil {
