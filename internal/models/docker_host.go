@@ -237,21 +237,40 @@ func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *webso
 	defer HijackedResp.Close()
 
 	dh.Logger.Printf("[%s] web console connect to %s  with execId-%s", dh.ip, container, execId)
-	errHijack := dh.hijackRequest(websocketConn, HijackedResp)
+	errHijack := dh.interactiveExec(websocketConn, HijackedResp)
 	dh.Logger.Printf("[%s] web console disconnect to %s  with execId-%s", dh.ip, container, execId)
 
 	return errHijack
 }
 
+// resizeTtyTo resizes tty to specific height and width
+func (dh *DockerHost) ResizeTtyTo(ctx context.Context, id string, height, width uint) error {
+	if height == 0 && width == 0 {
+		return nil
+	}
+
+	options := types.ResizeOptions{
+		Height: height,
+		Width:  width,
+	}
+
+	err := dh.Cli.ContainerExecResize(ctx, id, options)
+
+	if err != nil {
+		dh.Logger.Printf("[%s] Error resize: %s\r", err)
+	}
+	return err
+}
+
 // hijackRequest manage the tcp connection
-func (dh *DockerHost) hijackRequest(websocketConn *websocket.Conn, HijackedResp types.HijackedResponse) error {
-	tcpConn, brw := HijackedResp.Conn, HijackedResp.Reader
+func (dh *DockerHost) interactiveExec(websocketConn *websocket.Conn, HijackedResp types.HijackedResponse) error {
+	tcpConn, resultBufReader := HijackedResp.Conn, HijackedResp.Reader
 	defer HijackedResp.CloseWrite()
 	defer tcpConn.Close()
 
 	errorChan := make(chan error, 1)
-	go streamFromTCPConnToWebsocketConn(websocketConn, brw, errorChan)
-	go streamFromWebsocketConnToTCPConn(websocketConn, tcpConn, errorChan)
+	go resultFromDockerToWebsocket(websocketConn, resultBufReader, errorChan)
+	go cmdFromWebsocketToDocker(websocketConn, tcpConn, errorChan)
 
 	select {
 	case err := <-errorChan:
@@ -260,13 +279,14 @@ func (dh *DockerHost) hijackRequest(websocketConn *websocket.Conn, HijackedResp 
 		}
 	case <-dh.Done:
 		tcpConn.Write([]byte("exit\n"))
+		HijackedResp.Close()
 	}
 
 	return nil
 }
 
-// streamFromWebsocketConnToTCPConn
-func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error) {
+// cmdFromWebsocketToContainer
+func cmdFromWebsocketToDocker(websocketConn *websocket.Conn, tcpConn net.Conn, errorChan chan error) {
 	for {
 		_, in, err := websocketConn.ReadMessage()
 		if err != nil {
@@ -282,8 +302,8 @@ func streamFromWebsocketConnToTCPConn(websocketConn *websocket.Conn, tcpConn net
 	}
 }
 
-// streamFromTCPConnToWebsocketConn
-func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error) {
+// resultFromDockerToWebsocket
+func resultFromDockerToWebsocket(websocketConn *websocket.Conn, br *bufio.Reader, errorChan chan error) {
 	for {
 		out := make([]byte, 1024)
 		n, err := br.Read(out)
@@ -301,6 +321,7 @@ func streamFromTCPConnToWebsocketConn(websocketConn *websocket.Conn, br *bufio.R
 	}
 }
 
+// copy from portainer
 func validString(s string) string {
 	if !utf8.ValidString(s) {
 		v := make([]rune, 0, len(s))
