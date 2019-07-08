@@ -234,7 +234,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				_, err := dh.Cli.Ping(ctx)
 				if err != nil {
 					dh.Logger.Printf("[%s]  time out for collecting %s reach the top times, err of Ping is: %v", dh.GetIP(), cm.ContainerName, err)
-					dh.StopCollect()
+					dh.StopCollect(false)
 					t.Stop()
 					return
 				}
@@ -262,7 +262,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				return
 			} else if err != nil && err == dockerDaemonErr {
 				dh.Logger.Printf("[%s]  collecting stats daemon error occured: %v", dh.GetIP(), err)
-				dh.StopCollect()
+				dh.StopCollect(false)
 				t.Stop()
 				return
 			}
@@ -294,7 +294,13 @@ func RecoveryStopped() {
 			host, _ := key.(string)
 			cli, err := InitClient(host)
 			if err != nil {
+				failTimes, _ := value.(int)
+				if failTimes > 60 {
+					failTimes = 0
+					go util.Email(fmt.Sprintf("host-%s maybe done , please check", host))
+				}
 				config.MonitorInfo.Logger.Printf("[recovery-stopped] host-%s init client error : %v", key, err.Error())
+				models.StoppedDockerHost.Store(key, failTimes+1)
 				return true
 			}
 			//
@@ -435,9 +441,9 @@ func WriteAllHostInfo() {
 			config.MonitorInfo.Logger.Println("[all-host] no more docker daemon is running, return store all host info to influxDB")
 			return
 		}
-		fields["hostNum"] = len(config.MonitorInfo.Hosts)
+		fields["hostNum"] = config.MonitorInfo.GetHostsLen()
 		fields["dockerdRunning"] = runningDockerHost
-		fields["dockerdDead"] = len(config.MonitorInfo.Hosts) - runningDockerHost
+		fields["dockerdDead"] = config.MonitorInfo.GetHostsLen() - runningDockerHost
 		fields["totalContainer"] = totalContainer
 		fields["totalRunning"] = totalRunningContainer
 		fields["totalStopped"] = totalContainer - totalRunningContainer

@@ -62,8 +62,10 @@ func (dh *DockerHost) Remove(id string) {
 	dh.Unlock()
 }
 
-func (dh *DockerHost) StopCollect() {
+func (dh *DockerHost) StopCollect(rmStop bool) {
 	dh.Lock()
+	defer dh.Unlock()
+
 	if !dh.closed {
 		//set all containerStack status to invalid, to stop all collecting
 		for _, containerStack := range dh.cStats {
@@ -72,9 +74,10 @@ func (dh *DockerHost) StopCollect() {
 		close(dh.Done)
 		dh.closed = true
 		dh.Logger.Printf("[%s] stop all container collect", dh.ip)
-		StoppedDockerHost.Store(dh.ip, struct{}{})
+		if !rmStop {
+			StoppedDockerHost.Store(dh.ip, 1)
+		}
 	}
-	dh.Unlock()
 }
 
 func (dh *DockerHost) isKnownContainer(cid string) int {
@@ -165,7 +168,7 @@ func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct
 			c <- event
 		case err := <-errq:
 			dh.Logger.Printf("[%s] listen docker event occured error : %v", dh.ip, err)
-			dh.StopCollect()
+			dh.StopCollect(false)
 			return
 		case <-dh.Done:
 			return
@@ -274,12 +277,12 @@ func (dh *DockerHost) interactiveExec(websocketConn *websocket.Conn, HijackedRes
 
 	select {
 	case err := <-errorChan:
+		tcpConn.Write([]byte("exit\n"))
 		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
 			return err
 		}
 	case <-dh.Done:
 		tcpConn.Write([]byte("exit\n"))
-		HijackedResp.Close()
 	}
 
 	return nil
@@ -361,7 +364,7 @@ func GetHostContainerInfo(ip string) []string {
 }
 
 func AllStoppedDHIP() []string {
-	ips := make([]string, 0, len(config.MonitorInfo.Hosts))
+	ips := make([]string, 0, config.MonitorInfo.GetHostsLen())
 	StoppedDockerHost.Range(func(key, value interface{}) bool {
 		ip, _ := key.(string)
 		ips = append(ips, ip)
@@ -373,13 +376,13 @@ func AllStoppedDHIP() []string {
 
 func StopAllDockerHost() {
 	times := 0
-	for len(AllStoppedDHIP()) != len(config.MonitorInfo.Hosts) {
+	for len(AllStoppedDHIP()) != config.MonitorInfo.GetHostsLen() {
 		if times >= 2 {
 			break
 		}
 		DockerHostCache.Range(func(key, value interface{}) bool {
 			if dh, ok := value.(*DockerHost); ok && dh.IsValid() {
-				dh.StopCollect()
+				dh.StopCollect(true)
 			}
 			time.Sleep(5 * time.Microsecond)
 			return true
