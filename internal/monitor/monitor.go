@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -233,7 +232,8 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 			if timeoutTimes == config.MonitorInfo.MaxTimeoutTimes {
 				_, err := dh.Cli.Ping(ctx)
 				if err != nil {
-					dh.Logger.Printf("[%s]  time out for collecting %s reach the top times, err of Ping is: %v", dh.GetIP(), cm.ContainerName, err)
+					dh.Logger.Printf("[%s]  time out for collecting %s reach the top  %d times, err of Ping is: %v",
+						dh.GetIP(), cm.ContainerName, config.MonitorInfo.MaxTimeoutTimes, err)
 					dh.StopCollect(false)
 					t.Stop()
 					return
@@ -248,7 +248,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				waitFirst.Done()
 			}
 			timeoutTimes++
-			dh.Logger.Printf("[%s]  collect for container-%s time out for %d times", dh.GetIP(), cm.ContainerName, strconv.Itoa(timeoutTimes))
+			dh.Logger.Printf("[%s]  collect for container-%s time out for %d times", dh.GetIP(), cm.ContainerName, timeoutTimes)
 			t.Reset(config.MonitorInfo.CollectTimeout)
 		case err := <-u:
 			//EOF error maybe mean docker daemon err
