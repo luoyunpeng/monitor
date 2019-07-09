@@ -98,11 +98,10 @@ func Load() {
 	if err != nil {
 		// do nothing, ignore error
 	}
-
+	defer logConfigure()
 	if isInContainer {
 		logger.Println("[config] monitor is running inside container")
 		defaultConfig()
-		logConfigure()
 		return
 	}
 	loadFromConfigureFile()
@@ -142,7 +141,7 @@ func loadFromConfigureFile() {
 
 func adaptConfigure() {
 	MonitorInfo.CollectDuration = MonitorInfo.CollectDuration * time.Second
-	MonitorInfo.CollectTimeout = MonitorInfo.CollectDuration + 10*time.Second
+	MonitorInfo.CollectTimeout = MonitorInfo.CollectDuration * 2
 	MonitorInfo.SqlHost = MonitorInfo.SqlHost + ":" + MonitorInfo.SqlPort
 }
 

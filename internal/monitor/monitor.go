@@ -215,7 +215,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				response.Body.Close()
 				if !cm.IsInValid() {
 					//dh.logger.Println(cm.ID, cm.ContainerName, cfm.CPUPercentage, cfm.Memory, cfm.MemoryLimit, cfm.MemoryPercentage, cfm.NetworkRx, cfm.NetworkTx, cfm.BlockRead, cfm.BlockWrite, cfm.ReadTime)
-					WriteMetricToInfluxDB(dh.GetIP(), cm.ContainerName, cfm)
+					go WriteMetricToInfluxDB(dh.GetIP(), cm.ContainerName, cfm)
 				}
 				time.Sleep(config.MonitorInfo.CollectDuration)
 			}
