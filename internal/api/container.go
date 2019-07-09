@@ -264,6 +264,7 @@ func AddDockerhost(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 	//port := ctx.DefaultQuery("host", "2375")
 
+	// if host already in monitor list, return
 	if _, ok := models.DockerHostCache.Load(host); ok {
 		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
 		return
@@ -274,10 +275,10 @@ func AddDockerhost(ctx *gin.Context) {
 		ctx.JSONP(http.StatusNotFound, err.Error())
 		return
 	}
-	//
+
 	models.StoppedDockerHost.Delete(host)
-	if !config.IsKnownHost(host) {
-		config.MonitorInfo.Hosts = append(config.MonitorInfo.Hosts, host)
+	if config.MonitorInfo.DockerHostIndex(host) == -1 {
+		config.MonitorInfo.AddHost(host)
 	}
 	go monitor.Monitor(cli, host, config.MonitorInfo.Logger)
 	ctx.JSONP(http.StatusOK, "successfully add")
@@ -285,15 +286,20 @@ func AddDockerhost(ctx *gin.Context) {
 
 // StopDockerHostCollect
 func StopDockerHostCollect(ctx *gin.Context) {
+	var rmStop bool
 	host := ctx.Params.ByName("host")
+	rm := ctx.DefaultQuery("rm", "0")
+	if rm == "1" {
+		rmStop = true
+	}
 
-	if !config.IsKnownHost(host) {
+	if config.MonitorInfo.DockerHostIndex(host) == -1 {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
 	if dh, err := models.GetDockerHost(host); err == nil {
-		dh.StopCollect()
+		dh.StopCollect(rmStop)
 		time.Sleep(1 * time.Millisecond)
 		if models.GetHostContainerInfo(host) == nil {
 			ctx.JSONP(http.StatusOK, "successfully stopped")
@@ -316,14 +322,14 @@ func DownDockerHostInfo(ctx *gin.Context) {
 
 // AllDockerHostInfo
 func AllDockerHostInfo(ctx *gin.Context) {
-	ctx.JSONP(http.StatusOK, config.MonitorInfo.Hosts)
+	ctx.JSONP(http.StatusOK, config.MonitorInfo.GetHosts())
 }
 
 // ContainerSliceCapDebug
 func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
-	if !config.IsKnownHost(host) {
+	if config.MonitorInfo.DockerHostIndex(host) == -1 {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
@@ -523,6 +529,23 @@ func ContainerConsole(ctx *gin.Context) {
 	}
 }
 
+// ContainerTtyResize handles GET requests on /container/ttyresize/id?host=<hostName or ip addr>
+func ContainerTtyResize(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		return
+	}
+
+	dh, err := models.GetDockerHost(hostName)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	<-dh.Done
+}
+
 // ContainerLogs handles GET requests on "/host/mem" for localhost
 /*
 func HostMemInfo(ctx *gin.Context) {
@@ -557,7 +580,7 @@ func checkParam(id, hostName string) string {
 	}
 
 	isHostKnown := false
-	for _, h := range config.MonitorInfo.Hosts {
+	for _, h := range config.MonitorInfo.GetHosts() {
 		if hostName == h {
 			isHostKnown = true
 		}

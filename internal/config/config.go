@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"github.com/go-ini/ini"
@@ -33,6 +34,56 @@ type configure struct {
 	InfluxDBPassword string
 
 	Logger *log.Logger
+
+	sync.RWMutex
+}
+
+func (c *configure) GetHostsLen() int {
+	c.RLock()
+	hostLen := len(c.Hosts)
+	c.RUnlock()
+	return hostLen
+}
+
+func (c *configure) GetHosts() []string {
+	c.RLock()
+	var hosts []string
+	hosts = append(hosts, c.Hosts...)
+	c.RUnlock()
+	return hosts
+}
+
+func (c *configure) AddHost(host string) {
+	c.Lock()
+	c.Hosts = append(c.Hosts, host)
+	c.Unlock()
+}
+
+func (c *configure) DeleteHost(host string) bool {
+	index := c.DockerHostIndex(host)
+	if index == -1 {
+		return false
+	}
+	c.Lock()
+	c.Hosts = append(c.Hosts[:index], c.Hosts[index+1:]...)
+	c.Unlock()
+	return true
+}
+
+func (c *configure) DockerHostIndex(host string) int {
+	c.RLock()
+	defer c.RUnlock()
+
+	if MonitorInfo.Hosts == nil {
+		panic("please init config first")
+	}
+	for index, v := range MonitorInfo.Hosts {
+		if v == host {
+			return index
+		}
+	}
+
+	return -1
 }
 
 func Load() {
@@ -80,7 +131,7 @@ func loadFromConfigureFile() {
 	if err != nil {
 		panic(err)
 	}
-	if len(MonitorInfo.Hosts) == 0 {
+	if MonitorInfo.GetHostsLen() == 0 {
 		panic("at least one host must given")
 	}
 	if MonitorInfo.CollectDuration < 30 || MonitorInfo.CollectDuration > 120 {
@@ -116,17 +167,4 @@ func defaultConfig() {
 		Logger:           MonitorInfo.Logger,
 	}
 	adaptConfigure()
-}
-
-func IsKnownHost(host string) bool {
-	if MonitorInfo.Hosts == nil {
-		panic("please init config first")
-	}
-	for _, v := range MonitorInfo.Hosts {
-		if v == host {
-			return true
-		}
-	}
-
-	return false
 }
