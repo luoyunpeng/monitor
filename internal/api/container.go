@@ -293,8 +293,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 		rmStop = true
 	}
 
-	// delete fail will return false, because host does not exist
-	if !config.MonitorInfo.DeleteHost(host) {
+	if config.MonitorInfo.DockerHostIndex(host) == -1 {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
