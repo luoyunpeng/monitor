@@ -284,7 +284,7 @@ func AddDockerhost(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, "successfully add")
 }
 
-// StopDockerHostCollect
+// StopDockerHostCollect default /host/stop/:host?rm=0
 func StopDockerHostCollect(ctx *gin.Context) {
 	var rmStop bool
 	host := ctx.Params.ByName("host")
@@ -293,7 +293,8 @@ func StopDockerHostCollect(ctx *gin.Context) {
 		rmStop = true
 	}
 
-	if config.MonitorInfo.DockerHostIndex(host) == -1 {
+	// delete fail will return false, because host does not exist
+	if !config.MonitorInfo.DeleteHost(host) {
 		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
