@@ -9,3 +9,7 @@ os:
 script: make
 notifications:
   email: false
+
+cache:
+  directories:
+    - $HOME/gopath/pkg/mod
