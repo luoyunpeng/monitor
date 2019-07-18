@@ -76,7 +76,9 @@ func (dh *DockerHost) StopCollect(rmStop bool) {
 		dh.Logger.Printf("[%s] stop all container collect", dh.ip)
 		if !rmStop {
 			StoppedDockerHost.Store(dh.ip, 1)
+			return
 		}
+		config.MonitorInfo.DeleteHost(dh.ip)
 	}
 }
 
