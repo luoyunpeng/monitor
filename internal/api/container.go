@@ -5,10 +5,13 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/internal/config"
@@ -412,6 +415,63 @@ func CopyAcrossContainer_order(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, "across containers copy ok")
+}
+
+// CopyFromContainer copies file from container to local
+func CopyFromContainer(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	srcPath := ctx.DefaultQuery("srcPath", "/opt/repchain/RepChainDB")
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		return
+	}
+
+	srcDH, err := models.GetDockerHost(hostName)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	baseName := filepath.Base(srcPath)
+	content, _, err := srcDH.CopyFromContainer(context.Background(), id, srcPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	hashDir := util.ComputeHmac256(id, hostName)[:18]
+	err = os.MkdirAll("./"+hashDir, os.ModeDir)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	dstPath := "./" + hashDir + "/"
+	srcInfo := archive.CopyInfo{
+		Path:       srcPath,
+		Exists:     true,
+		IsDir:      true,
+		RebaseName: "",
+	}
+	err = archive.CopyTo(content, srcInfo, dstPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	if !util.Exists(dstPath + baseName) {
+		ctx.JSON(http.StatusNotFound, "copy from container failed")
+		return
+	}
+
+	err = util.Zip(dstPath+baseName, dstPath+baseName+".zip")
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	defer os.RemoveAll(dstPath)
+
+	ctx.File(dstPath + baseName + ".zip")
 }
 
 var upGrader = websocket.Upgrader{

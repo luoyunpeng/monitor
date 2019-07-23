@@ -28,6 +28,7 @@ func registerRoutes(app *gin.Engine) {
 		v1.GET("/container/debug/slicecap/:host", api.ContainerSliceCapDebug)
 		v1.GET("/host/all", api.AllDockerHostInfo)
 
-		v1.GET("/container/copy/", api.CopyAcrossContainer)
+		v1.GET("/container/across/", api.CopyAcrossContainer)
+		v1.GET("/container/copy/", api.CopyFromContainer)
 	}
 }
