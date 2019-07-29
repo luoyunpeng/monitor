@@ -1,6 +1,9 @@
 package util
 
 import (
+	"crypto/hmac"
+	"crypto/sha512"
+	"encoding/base64"
 	"math"
 	"strings"
 	"unsafe"
@@ -36,4 +39,11 @@ func IsInsideContainer() (bool, error) {
 	}
 
 	return false, nil
+}
+
+func ComputeHmac256(message string, secret string) string {
+	key := []byte(secret)
+	h := hmac.New(sha512.New, key)
+	h.Write([]byte(message))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

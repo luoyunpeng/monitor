@@ -3,8 +3,11 @@ package api
 import (
 	"bufio"
 	"context"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -412,6 +415,47 @@ func CopyAcrossContainer_order(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, "across containers copy ok")
+}
+
+// CopyFromContainer copies file from container to local
+func CopyFromContainer(ctx *gin.Context) {
+	id := ctx.Params.ByName("id")
+	hostName := ctx.DefaultQuery("host", "")
+	srcPath := ctx.DefaultQuery("srcPath", "RepChainDB")
+	if errInfo := checkParam(id, hostName); errInfo != "" {
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		return
+	}
+	srcPath = "/opt/repchain/" + srcPath
+	srcDH, err := models.GetDockerHost(hostName)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	srcStat, err := srcDH.Cli.ContainerStatPath(ctx, id, srcPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	baseName := filepath.Base(srcPath)
+	content, _, err := srcDH.CopyFromContainer(context.Background(), id, srcPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	defer content.Close()
+
+	ctx.Writer.WriteHeader(http.StatusOK)
+	ctx.Header("Content-Disposition", "attachment; filename="+baseName+".tar")
+	ctx.Header("Content-Type", "application/text/plain")
+	ctx.Header("Accept-Length", fmt.Sprintf("%d", srcStat.Size))
+
+	_, err = io.Copy(ctx.Writer, content)
+	if err != nil {
+		log.Println(err)
+	}
+
 }
 
 var upGrader = websocket.Upgrader{
