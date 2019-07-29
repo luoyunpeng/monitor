@@ -3,15 +3,15 @@ package api
 import (
 	"bufio"
 	"context"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/pkg/archive"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/luoyunpeng/monitor/internal/config"
@@ -421,57 +421,41 @@ func CopyAcrossContainer_order(ctx *gin.Context) {
 func CopyFromContainer(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
-	srcPath := ctx.DefaultQuery("srcPath", "/opt/repchain/RepChainDB")
+	srcPath := ctx.DefaultQuery("srcPath", "RepChainDB")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
 		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
-
+	srcPath = "/opt/repchain/" + srcPath
 	srcDH, err := models.GetDockerHost(hostName)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 
+	srcStat, err := srcDH.Cli.ContainerStatPath(ctx, id, srcPath)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
 	baseName := filepath.Base(srcPath)
 	content, _, err := srcDH.CopyFromContainer(context.Background(), id, srcPath)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
+	defer content.Close()
 
-	hashDir := util.ComputeHmac256(id, hostName)[:18]
-	err = os.MkdirAll("./"+hashDir, os.ModeDir)
+	ctx.Writer.WriteHeader(http.StatusOK)
+	ctx.Header("Content-Disposition", "attachment; filename="+baseName+".tar")
+	ctx.Header("Content-Type", "application/text/plain")
+	ctx.Header("Accept-Length", fmt.Sprintf("%d", srcStat.Size))
+
+	_, err = io.Copy(ctx.Writer, content)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-	dstPath := "./" + hashDir + "/"
-	srcInfo := archive.CopyInfo{
-		Path:       srcPath,
-		Exists:     true,
-		IsDir:      true,
-		RebaseName: "",
-	}
-	err = archive.CopyTo(content, srcInfo, dstPath)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
+		log.Println(err)
 	}
 
-	if !util.Exists(dstPath + baseName) {
-		ctx.JSON(http.StatusNotFound, "copy from container failed")
-		return
-	}
-
-	err = util.Zip(dstPath+baseName, dstPath+baseName+".zip")
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-	defer os.RemoveAll(dstPath)
-
-	ctx.File(dstPath + baseName + ".zip")
 }
 
 var upGrader = websocket.Upgrader{
