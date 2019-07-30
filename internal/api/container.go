@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -344,73 +343,29 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "stopped host")
 }
 
-// CopyAcrossContainer for testing will rm
+// CopyAcrossContainer backup copying by order
 func CopyAcrossContainer(ctx *gin.Context) {
-	fileName := ctx.Params.ByName("file")
-	destHost := ctx.DefaultQuery("host", "")
-	if fileName == "" || destHost == "" {
-		ctx.JSON(http.StatusNotFound, "file name/destHost must given")
-		return
-	}
-	srcHost := "192.168.100.177"
-
-	srcContainer := "testcp1"
-	destContainer := "testcp"
-
-	srcPath := "/opt/"
-	destPath := srcPath
-	srcPath += fileName
-	c := context.Background()
-
-	srcDH, err := models.GetDockerHost(srcHost)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-	destDH, err := models.GetDockerHost(destHost)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-
-	content, name, err := srcDH.CopyFromContainer(c, srcContainer, srcPath)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-
-	err = destDH.CopyToContainer(c, content, destContainer, destPath, name)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
-		return
-	}
-
-	ctx.JSON(http.StatusOK, "across containers copy ok")
-}
-
-// CopyAcrossContainer_order backup copying
-func CopyAcrossContainer_order(ctx *gin.Context) {
 	srcOrderId := ctx.DefaultQuery("srcOrder", "")
 	destOrderId := ctx.DefaultQuery("destOrder", "")
 	if srcOrderId == "" || destOrderId == "" {
-		ctx.JSON(http.StatusNotFound, "src and dest orderId must given")
+		ctx.JSON(http.StatusBadRequest, "src and dest orderId must given")
 		return
 	}
 
 	srcOrderInfo, err := monitor.QueryOrder(srcOrderId)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 	destOrderInfo, err := monitor.QueryOrder(destOrderId)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
 	err = models.CheckOrderInfo(srcOrderInfo, destOrderInfo)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -418,44 +373,43 @@ func CopyAcrossContainer_order(ctx *gin.Context) {
 }
 
 // CopyFromContainer copies file from container to local
-func CopyFromContainer(ctx *gin.Context) {
+func DownloadFromContainer(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	srcPath := ctx.DefaultQuery("srcPath", "RepChainDB")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusBadRequest, Msg: errInfo, Metric: nil})
 		return
 	}
+	baseName := srcPath
 	srcPath = "/opt/repchain/" + srcPath
 	srcDH, err := models.GetDockerHost(hostName)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
 	srcStat, err := srcDH.Cli.ContainerStatPath(ctx, id, srcPath)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	baseName := filepath.Base(srcPath)
 	content, _, err := srcDH.CopyFromContainer(context.Background(), id, srcPath)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 	defer content.Close()
 
 	ctx.Writer.WriteHeader(http.StatusOK)
 	ctx.Header("Content-Disposition", "attachment; filename="+baseName+".tar")
-	ctx.Header("Content-Type", "application/text/plain")
+	ctx.Header("Content-Type", "application/octet-stream")
 	ctx.Header("Accept-Length", fmt.Sprintf("%d", srcStat.Size))
 
 	_, err = io.Copy(ctx.Writer, content)
 	if err != nil {
-		log.Println(err)
+		ctx.JSON(http.StatusBadRequest, err.Error())
 	}
-
 }
 
 var upGrader = websocket.Upgrader{
