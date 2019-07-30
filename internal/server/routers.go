@@ -29,6 +29,6 @@ func registerRoutes(app *gin.Engine) {
 		v1.GET("/host/all", api.AllDockerHostInfo)
 
 		// v1.GET("/container/across/", api.CopyAcrossContainer)
-		v1.GET("/container/copy/", api.DownloadFromContainer)
+		v1.GET("/container/download/:id", api.DownloadFromContainer)
 	}
 }

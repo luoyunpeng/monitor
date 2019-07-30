@@ -378,7 +378,7 @@ func DownloadFromContainer(ctx *gin.Context) {
 	hostName := ctx.DefaultQuery("host", "")
 	srcPath := ctx.DefaultQuery("srcPath", "RepChainDB")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusBadRequest, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusBadRequest, Msg: errInfo, Metric: nil})
 		return
 	}
 	baseName := srcPath
