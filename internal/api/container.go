@@ -406,7 +406,8 @@ func DownloadFromContainer(ctx *gin.Context) {
 	ctx.Header("Content-Type", "application/octet-stream")
 	ctx.Header("Accept-Length", fmt.Sprintf("%d", srcStat.Size))
 
-	_, err = io.Copy(ctx.Writer, content)
+	var buf [64]byte
+	_, err = io.CopyBuffer(ctx.Writer, content, buf[:])
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err.Error())
 	}
