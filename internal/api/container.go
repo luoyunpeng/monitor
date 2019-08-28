@@ -19,6 +19,8 @@ import (
 	"github.com/luoyunpeng/monitor/internal/util"
 )
 
+// RepMetric represents api get response, for easy, wrap status code
+// TODO: based on needed, remove status code,
 type RepMetric struct {
 	StatusCode int    `json:"statusCode"`
 	Status     int    `json:"status"`
@@ -312,7 +314,7 @@ func StopDockerHostCollect(ctx *gin.Context) {
 	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
 }
 
-// DownDockerHostInfo
+// DownDockerHostInfo return the host info in stop-cache
 func DownDockerHostInfo(ctx *gin.Context) {
 	ips := models.AllStoppedDHIP()
 
@@ -322,12 +324,12 @@ func DownDockerHostInfo(ctx *gin.Context) {
 	}{Len: len(ips), IPS: ips})
 }
 
-// AllDockerHostInfo
+// AllDockerHostInfo return all host in configure file
 func AllDockerHostInfo(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, config.MonitorInfo.GetHosts())
 }
 
-// ContainerSliceCapDebug
+// ContainerSliceCapDebug is the slice cap, just for debug
 func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
@@ -372,7 +374,39 @@ func CopyAcrossContainer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, "across containers copy ok")
 }
 
-// CopyFromContainer copies file from container to local
+// PauseService pauses all container in the order id
+func PauseService(ctx *gin.Context) {
+	srcOrderId := ctx.DefaultQuery("order", "")
+	if srcOrderId == "" {
+		ctx.JSON(http.StatusBadRequest, "orderId must apply")
+		return
+	}
+
+	orderInfo, err := monitor.QueryOrder(srcOrderId)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	c := context.Background()
+	for _, info := range orderInfo {
+		dh, err := models.GetDockerHost(info.IpAddr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		err = dh.Cli.ContainerPause(c, info.ContainerID)
+		if err != nil {
+			// print it, do not handle it
+			dh.Logger.Printf("[%s] container pause error: %v", dh.GetIP(), err)
+			continue
+		}
+		dh.Logger.Printf("[%s] container: %s", dh.GetIP(), info.ContainerID)
+	}
+
+	ctx.JSON(http.StatusOK, "service containers pause ok")
+}
+
+// DownloadFromContainer download file or directory from container
 func DownloadFromContainer(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")

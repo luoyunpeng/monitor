@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// ReadLines reads contents from file and splits them by new line.
+// ReadLinesOffsetN reads contents from file and splits them by new line.
 // The offset tells at which line number to start.
 // The count determines the number of lines to read (starting from offset):
 //   n >= 0: at most n lines
@@ -38,6 +38,7 @@ func ReadLinesOffsetN(filename string, offset uint, n int) ([]string, error) {
 	return ret, nil
 }
 
+// GetEnv get local env
 func GetEnv(key string, dfault string, combineWith ...string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -57,7 +58,7 @@ func GetEnv(key string, dfault string, combineWith ...string) string {
 	}
 }
 
-// srcFile could be a single file or a directory
+// Zip compress the src to dest file, srcFile could be a single file or a directory
 func Zip(srcFile string, destZip string) error {
 	zipfile, err := os.Create(destZip)
 	if err != nil {
@@ -104,13 +105,14 @@ func Zip(srcFile string, destZip string) error {
 	return err
 }
 
-// Returns true if path exists
+// Exists check if path exists
 func Exists(path string) bool {
 	info, err := os.Stat(path)
 
 	return err == nil && info.IsDir()
 }
 
+// HostProc return path info
 func HostProc(combineWith ...string) string {
 	return GetEnv("HOST_PROC", "/proc", combineWith...)
 }

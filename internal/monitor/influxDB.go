@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	influCli   client.Client
+	influCli client.Client
+	// MetricChan use for receive and transport metric,
 	MetricChan chan Metric
 	influxDB   string
 )

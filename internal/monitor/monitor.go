@@ -24,7 +24,7 @@ var (
 	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
-// KeepStats keeps monitor all container of the given host
+// Monitor keeps monitor all container running on the given host
 func Monitor(dockerCli *client.Client, ip string, logger *log.Logger) {
 	ctx := context.Background()
 
@@ -384,7 +384,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info singleHostInfo) {
 	createMetricAndWrite(measurement, tags, fields, time.Now())
 }
 
-// Calculate all docker host info and write to influxDB
+// WriteAllHostInfo  Calculate all docker host info and write to influxDB
 func WriteAllHostInfo() {
 	var (
 		runningDockerHost, totalContainer, totalRunningContainer int

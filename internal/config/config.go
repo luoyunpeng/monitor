@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	// common config info
 	MonitorInfo configure
 )
 
@@ -86,6 +87,7 @@ func (c *configure) DockerHostIndex(host string) int {
 	return -1
 }
 
+// Load load configure info, if monitor runs on host machine, load from configure file, or inside container load default
 func Load() {
 	//global logger
 	logger := util.InitLog("global")
@@ -98,13 +100,16 @@ func Load() {
 	if err != nil {
 		// do nothing, ignore error
 	}
-	defer logConfigure()
+
 	if isInContainer {
 		logger.Println("[config] monitor is running inside container")
 		defaultConfig()
+		logConfigure()
 		return
 	}
 	loadFromConfigureFile()
+
+	log.Printf("collect: %v **** collect timeout: %v", MonitorInfo.CollectDuration, MonitorInfo.CollectTimeout)
 }
 
 func logConfigure() {

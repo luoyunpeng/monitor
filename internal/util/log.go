@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// InitLog init logger by ip addr
 func InitLog(ip string) *log.Logger {
 	file, err := os.OpenFile("/var/log/monitor/"+ip+".cmonitor", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
