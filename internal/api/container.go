@@ -519,7 +519,7 @@ func ContainerLogs(ctx *gin.Context) {
 			//
 			err = ws.WriteMessage(websocket.TextMessage, lineBytes[8:])
 			if err != nil {
-				log.Printf("err occured when write container log to websocket client: %v", err)
+				log.Printf("err occurred when write container log to websocket client: %v", err)
 				return
 			}
 		}
@@ -527,7 +527,7 @@ func ContainerLogs(ctx *gin.Context) {
 
 	errLoad := ws.WriteMessage(1, []byte("init docker cli failed for given ip/host, please checkout the ip/host"))
 	if errLoad != nil {
-		log.Printf("err occured when write load err log to websocket client: %v", errLoad)
+		log.Printf("err occurred when write load err log to websocket client: %v", errLoad)
 	}
 }
 
