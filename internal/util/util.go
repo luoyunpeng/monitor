@@ -9,10 +9,12 @@ import (
 	"unsafe"
 )
 
+// Bytes2str use unsafe convert byte slice to string with zero allocate
 func Bytes2str(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
+// Str2bytes use unsafe convert string to byte slice with zero allocate
 func Str2bytes(s string) []byte {
 	x := (*[2]uintptr)(unsafe.Pointer(&s))
 	h := [3]uintptr{x[0], x[1], x[1]}
@@ -41,6 +43,7 @@ func IsInsideContainer() (bool, error) {
 	return false, nil
 }
 
+// ComputeHmac256 encode with message and secret
 func ComputeHmac256(message string, secret string) string {
 	key := []byte(secret)
 	h := hmac.New(sha512.New, key)

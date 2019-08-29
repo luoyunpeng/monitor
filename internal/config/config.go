@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	// common config info
+	// MonitorInfo common monitor configure
 	MonitorInfo configure
 )
 
