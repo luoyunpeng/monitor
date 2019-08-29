@@ -486,7 +486,7 @@ func ContainerLogs(ctx *gin.Context) {
 	if errInfo := checkParam(id, hostName); errInfo != "" {
 		err = ws.WriteMessage(1, util.Str2bytes(errInfo))
 		if err != nil {
-			log.Printf("err ccured when write check parameter error for access container log: %v", err)
+			log.Printf("err occurred when write check parameter error for access container log: %v", err)
 		}
 		return
 	}

@@ -157,7 +157,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				response, err := dh.Cli.ContainerStats(ctx, cm.ID, false)
 				if err != nil && strings.Contains(err.Error(), "No such container") {
-					dh.Logger.Printf("[%s]  container-%s die event happend after calling stats", dh.GetIP(), cm.ID)
+					dh.Logger.Printf("[%s]  container-%s die event happened after calling stats", dh.GetIP(), cm.ID)
 					u <- errNoSuchC
 					return
 				} else if err != nil {
@@ -169,7 +169,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 
 				errD := decoder.Decode(&statsJSON)
 				if errD != nil {
-					dh.Logger.Printf("[%s]  Decode collecting stats for %s err occured: %v", dh.GetIP(), cm.ContainerName, errD)
+					dh.Logger.Printf("[%s]  Decode collecting stats for %s err occurred: %v", dh.GetIP(), cm.ContainerName, errD)
 				}
 
 				previousCPU = statsJSON.PreCPUStats.CPUUsage.TotalUsage
@@ -261,7 +261,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				t.Stop()
 				return
 			} else if err != nil && err == dockerDaemonErr {
-				dh.Logger.Printf("[%s]  collecting stats daemon error occured: %v", dh.GetIP(), err)
+				dh.Logger.Printf("[%s]  collecting stats daemon error occurred: %v", dh.GetIP(), err)
 				dh.StopCollect(false)
 				t.Stop()
 				return
@@ -415,7 +415,7 @@ func WriteAllHostInfo() {
 			if dh, ok := value.(*models.DockerHost); ok && dh.IsValid() {
 				info, infoErr = dh.Cli.Info(ctx)
 				if infoErr != nil {
-					config.MonitorInfo.Logger.Printf("[all-host] get docker-%s info occured error: %v", dh.GetIP(), infoErr)
+					config.MonitorInfo.Logger.Printf("[all-host] get docker-%s info occurred error: %v", dh.GetIP(), infoErr)
 					return true
 				}
 				runningDockerHost++
