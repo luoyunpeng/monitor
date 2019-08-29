@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	// Each container can store at most 15 stats record in individual container stack
+	// DockerHostCache: Each container can store at most 15 stats record in individual container stack
 	// Each Host has at least one container stack, we use Docker host to store the container stacks
 	// AllHostList stores every host's Docker host, the key is host ip address
 	DockerHostCache sync.Map
-	// All stopped docker host
+	// StoppedDockerHost stores all stopped docker host
 	StoppedDockerHost sync.Map
 )
 
@@ -30,6 +30,7 @@ func GetContainerMetrics(host, id string) ([]ParsedConatinerMetric, error) {
 	return nil, errors.New("given host " + host + " is not loaded")
 }
 
+// GetDockerHost get DockerHost from cache by ip addr
 func GetDockerHost(ip string) (*DockerHost, error) {
 	if hoststackTmp, ok := DockerHostCache.Load(ip); ok {
 		if dh, ok := hoststackTmp.(*DockerHost); ok {

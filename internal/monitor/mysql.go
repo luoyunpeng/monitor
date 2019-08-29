@@ -3,6 +3,7 @@ package monitor
 import (
 	"database/sql"
 
+	// load mysql driver
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/luoyunpeng/monitor/internal/config"
 	"github.com/luoyunpeng/monitor/internal/models"
@@ -21,6 +22,7 @@ var (
 	tableContainer = "b_container_service"
 )
 
+// InitMysql init mysql connection pool
 func InitMysql() error {
 	if db != nil {
 		return nil
@@ -48,6 +50,7 @@ func InitMysql() error {
 	return nil
 }
 
+// ChangeContainerStatus change container status
 func ChangeContainerStatus(id, status string) error {
 	errInit := InitMysql()
 	if errInit != nil {
@@ -66,6 +69,7 @@ func ChangeContainerStatus(id, status string) error {
 	return err
 }
 
+// QueryContainerStatus query container status by container id
 func QueryContainerStatus(id string) (int, error) {
 	errInit := InitMysql()
 	if errInit != nil {
@@ -85,6 +89,7 @@ func QueryContainerStatus(id string) (int, error) {
 	return status, nil
 }
 
+// QueryOrder query order info by order id
 func QueryOrder(orderId string) ([]models.OrderInfo, error) {
 	errInit := InitMysql()
 	if errInit != nil {
@@ -110,6 +115,7 @@ func QueryOrder(orderId string) ([]models.OrderInfo, error) {
 	return res, nil
 }
 
+// CloseDB close mysql connections
 func CloseDB() error {
 	if db == nil {
 		return nil

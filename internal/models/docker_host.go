@@ -21,7 +21,7 @@ import (
 	"github.com/luoyunpeng/monitor/internal/config"
 )
 
-// DockerHost
+// DockerHost represent docker host info
 type DockerHost struct {
 	sync.RWMutex
 	cStats []*ContainerStats
@@ -34,11 +34,12 @@ type DockerHost struct {
 	closed bool
 }
 
-// NewContainerHost
+// NewDockerHost initial a new docker host
 func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
 	return &DockerHost{ip: ip, Logger: logger, Done: make(chan struct{})}
 }
 
+// Add add new start container
 func (dh *DockerHost) Add(cm *ContainerStats) bool {
 	dh.Lock()
 
@@ -51,6 +52,7 @@ func (dh *DockerHost) Add(cm *ContainerStats) bool {
 	return false
 }
 
+// Remove remove stopped container from cache
 func (dh *DockerHost) Remove(id string) {
 	dh.Lock()
 
@@ -62,6 +64,7 @@ func (dh *DockerHost) Remove(id string) {
 	dh.Unlock()
 }
 
+// StopCollect stop collecting current host,
 func (dh *DockerHost) StopCollect(rmStop bool) {
 	dh.Lock()
 	defer dh.Unlock()
@@ -91,6 +94,7 @@ func (dh *DockerHost) isKnownContainer(cid string) int {
 	return -1
 }
 
+// Length return running container that in monitoring cache
 func (dh *DockerHost) Length() int {
 	dh.RLock()
 	cmsLen := cap(dh.cStats)
@@ -99,6 +103,7 @@ func (dh *DockerHost) Length() int {
 	return cmsLen
 }
 
+// IsValid check current docker host is valid
 func (dh *DockerHost) IsValid() bool {
 	dh.RLock()
 	valid := !dh.closed
@@ -107,6 +112,7 @@ func (dh *DockerHost) IsValid() bool {
 	return valid
 }
 
+// AllNames return all running container name
 func (dh *DockerHost) AllNames() []string {
 	dh.RLock()
 
@@ -119,14 +125,17 @@ func (dh *DockerHost) AllNames() []string {
 	return names
 }
 
+// GetIP return current host ip address
 func (dh *DockerHost) GetIP() string {
 	return dh.ip
 }
 
+// GetContainerStats return all running container metric
 func (dh *DockerHost) GetContainerStats() []*ContainerStats {
 	return dh.cStats
 }
 
+// GetAllLastMemory calculate all latest amount mem that running container used
 func (dh *DockerHost) GetAllLastMemory() float64 {
 	dh.RLock()
 
@@ -139,7 +148,7 @@ func (dh *DockerHost) GetAllLastMemory() float64 {
 	return totalMem
 }
 
-// monitorContainerEvents watches for container creation and removal (only
+// ContainerEvents  watches for container creation and removal (only
 // used when calling `docker stats` without arguments).
 func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct{}, c chan events.Message) {
 	defer func() {
@@ -178,6 +187,7 @@ func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct
 	}
 }
 
+// CopyFromContainer copy file from container
 func (dh *DockerHost) CopyFromContainer(ctx context.Context, srcContainer, srcPath string) (io.ReadCloser, string, error) {
 	content, stat, err := dh.Cli.CopyFromContainer(ctx, srcContainer, srcPath)
 	if err != nil {
@@ -187,6 +197,7 @@ func (dh *DockerHost) CopyFromContainer(ctx context.Context, srcContainer, srcPa
 	return content, stat.Name, nil
 }
 
+// CopyToContainer copy file info container
 func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser, destContainer, destPath, name string) error {
 	dstStat, err := dh.Cli.ContainerStatPath(ctx, destContainer, destPath)
 	if err != nil {
@@ -195,7 +206,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 
 	// Validate the destination path
 	if err := ValidateOutputPathFileMode(dstStat.Mode); err != nil {
-		return errors.New(fmt.Sprintf("[%s] destination %s:%s must be a directory or a regular file", dh.ip, destContainer, destPath))
+		return fmt.Errorf("[%s] destination %s:%s must be a directory or a regular file", dh.ip, destContainer, destPath)
 	}
 
 	options := types.CopyToContainerOptions{
@@ -210,7 +221,7 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 	return dh.Cli.CopyToContainer(ctx, destContainer, destPath, content, options)
 }
 
-// ContainerConsole container console
+// ContainerConsole start a inactive container console
 func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *websocket.Conn, container, cmd string) error {
 	cli := dh.Cli
 	// before do ContainerExecCreate, check the container status, in case of  leaking execIDs
@@ -248,7 +259,7 @@ func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *webso
 	return errHijack
 }
 
-// resizeTtyTo resizes tty to specific height and width
+// ResizeTtyTo resize tty to specific height and width
 func (dh *DockerHost) ResizeTtyTo(ctx context.Context, id string, height, width uint) error {
 	if height == 0 && width == 0 {
 		return nil
@@ -365,6 +376,7 @@ func GetHostContainerInfo(ip string) []string {
 	return nil
 }
 
+// AllStoppedDHIP return all stopped docker host ip addr
 func AllStoppedDHIP() []string {
 	ips := make([]string, 0, config.MonitorInfo.GetHostsLen())
 	StoppedDockerHost.Range(func(key, value interface{}) bool {
@@ -376,6 +388,7 @@ func AllStoppedDHIP() []string {
 	return ips
 }
 
+// StopAllDockerHost stopped collection all docker host in cache
 func StopAllDockerHost() {
 	times := 0
 	for len(AllStoppedDHIP()) != config.MonitorInfo.GetHostsLen() {

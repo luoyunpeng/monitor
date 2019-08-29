@@ -14,6 +14,7 @@ import (
 	"github.com/luoyunpeng/monitor/internal/monitor"
 )
 
+// Start start the monitor api server
 func Start(port string) {
 	app := gin.Default()
 	app.Use(cors)
