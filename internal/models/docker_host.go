@@ -178,7 +178,7 @@ func (dh *DockerHost) ContainerEvents(ctx context.Context, started chan<- struct
 		case event := <-eventq:
 			c <- event
 		case err := <-errq:
-			dh.Logger.Printf("[%s] listen docker event occured error : %v", dh.ip, err)
+			dh.Logger.Printf("[%s] listen docker event occurred error : %v", dh.ip, err)
 			dh.StopCollect(false)
 			return
 		case <-dh.Done:
