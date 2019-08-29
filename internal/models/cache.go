@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	// DockerHostCache: Each container can store at most 15 stats record in individual container stack
+	// DockerHostCache cache docker host info the key is host ip address
+	// Each container can store at most 15 stats record in individual container stack
 	// Each Host has at least one container stack, we use Docker host to store the container stacks
-	// AllHostList stores every host's Docker host, the key is host ip address
 	DockerHostCache sync.Map
-	// StoppedDockerHost stores all stopped docker host
+	// StoppedDockerHost cache all stopped docker host
 	StoppedDockerHost sync.Map
 )
 
