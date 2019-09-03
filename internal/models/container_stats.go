@@ -2,7 +2,6 @@ package models
 
 import (
 	"sync"
-	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/luoyunpeng/monitor/internal/config"
@@ -21,9 +20,12 @@ type ParsedConatinerMetric struct {
 	BlockWrite       float64
 	PidsCurrent      uint64
 
-	//time
-	ReadTime            string
-	ReadTimeForInfluxDB time.Time
+	// ReadTime for rest api all
+	ReadTime string
+	//
+	ReadSec     int64
+	ReadNanoSec int
+	//ReadTimeForInfluxDB time.Time
 }
 
 // ContainerStats is container metric cache
