@@ -209,7 +209,9 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				}
 				statsJSON.Read.Add(time.Hour*8).AppendFormat(timeFormatSlice, "15:04:05")
 				cfm.ReadTime = string(timeFormat[:8])
-				cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if necessary add 8 hours
+				cfm.ReadSec = statsJSON.Read.Unix()
+				cfm.ReadNanoSec = statsJSON.Read.Nanosecond()
+				//cfm.ReadTimeForInfluxDB = statsJSON.Read //.Add(time.Hour * 8) , if necessary add 8 hours
 				cm.Put(cfm)
 				u <- nil
 				response.Body.Close()
@@ -341,7 +343,7 @@ func WriteMetricToInfluxDB(host, containerName string, containerMetrics models.P
 		}
 	}
 
-	createMetricAndWrite(measurement, tags, fields, containerMetrics.ReadTimeForInfluxDB)
+	createMetricAndWrite(measurement, tags, fields, time.Unix(containerMetrics.ReadSec, int64(containerMetrics.ReadNanoSec)))
 }
 
 type singleHostInfo struct {
