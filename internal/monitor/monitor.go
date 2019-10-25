@@ -241,6 +241,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 					return
 				}
 				timeoutTimes = 0
+				// call time.Reset after receive from t.C, so no need to clean the channel t.C
 				t.Reset(config.MonitorInfo.CollectTimeout)
 				continue
 			}
@@ -258,15 +259,20 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				break
 			}
 
-			if err == errNoSuchC {
+			if errors.Is(err, errNoSuchC) {
 				//hcmsStack.logger.Println(cms.ContainerName, " is not running, stop collecting in goroutine")
 				t.Stop()
 				return
-			} else if err != nil && err == dockerDaemonErr {
+			} else if err != nil && errors.Is(err, dockerDaemonErr) {
 				dh.Logger.Printf("[%s]  collecting stats daemon error occurred: %v", dh.GetIP(), err)
 				dh.StopCollect(false)
 				t.Stop()
 				return
+			}
+
+			// clean the channel t.C,  before reset the timer
+			if len(t.C) > 0 {
+				<-t.C
 			}
 			if err != nil {
 				t.Reset(config.MonitorInfo.CollectTimeout)
