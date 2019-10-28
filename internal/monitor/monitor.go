@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -156,19 +155,15 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 				}
 
 				response, err := dh.Cli.ContainerStats(ctx, cm.ID, false)
-				if err != nil && strings.Contains(err.Error(), "No such container") {
-					dh.Logger.Printf("[%s]  container-%s die event happened after calling stats", dh.GetIP(), cm.ID)
-					u <- errNoSuchC
-					return
-				} else if err != nil {
-					dockerDaemonErr = err
+				if err != nil {
+					dh.Logger.Printf("[%s]  docker daemon err for call stats on container-%s", dh.GetIP(), cm.ID)
+					dockerDaemonErr = fmt.Errorf("call Stats err: %w", err)
 					u <- dockerDaemonErr
 					return
 				}
 				bufferReader.Reset(response.Body)
 
-				errD := decoder.Decode(&statsJSON)
-				if errD != nil {
+				if errD := decoder.Decode(&statsJSON); errD != nil {
 					dh.Logger.Printf("[%s]  Decode collecting stats for %s err occurred: %v", dh.GetIP(), cm.ContainerName, errD)
 				}
 
@@ -232,8 +227,7 @@ func collect(cm *models.ContainerStats, waitFirst *sync.WaitGroup, dh *models.Do
 			// zero out the values if we have not received an update within
 			// the specified duration.
 			if timeoutTimes == config.MonitorInfo.MaxTimeoutTimes {
-				_, err := dh.Cli.Ping(ctx)
-				if err != nil {
+				if _, err := dh.Cli.Ping(ctx); err != nil {
 					dh.Logger.Printf("[%s]  time out for collecting %s reach the top  %d times, err of Ping is: %v",
 						dh.GetIP(), cm.ContainerName, config.MonitorInfo.MaxTimeoutTimes, err)
 					dh.StopCollect(false)
@@ -381,11 +375,10 @@ func WriteDockerHostInfoToInfluxDB(host string, info singleHostInfo) {
 	fields["totalMem"] = util.Round(float64(info.TotalMem)/(1024*1024*1024), 2)
 	fields["kernelVersion"] = info.KernelVersion
 	fields["os"] = info.OS
-	if hoststackTmp, ok := models.DockerHostCache.Load(host); ok {
-		if dh, ok := hoststackTmp.(*models.DockerHost); ok {
-			if dh.GetIP() == host {
-				fields["ContainerMemUsedPercentage"] = util.Round(dh.GetAllLastMemory()*100/float64(info.TotalMem/(1024*1024)), 2)
-			}
+
+	if dh, err := models.GetDockerHost(host); err == nil {
+		if dh.GetIP() == host {
+			fields["ContainerMemUsedPercentage"] = util.Round(dh.GetAllLastMemory()*100/float64(info.TotalMem/(1024*1024)), 2)
 		}
 	}
 
