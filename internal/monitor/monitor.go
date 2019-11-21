@@ -393,6 +393,7 @@ func WriteDockerHostInfoToInfluxDB(host string, info singleHostInfo) {
 func WriteAllHostInfo() {
 	var (
 		runningDockerHost, totalContainer, totalRunningContainer int
+		noHostCollect                                            int
 		measurement                                              = "allHost"
 		info                                                     types.Info
 		hostInfo                                                 singleHostInfo
@@ -442,10 +443,14 @@ func WriteAllHostInfo() {
 
 			return true
 		})
-		if runningDockerHost == 0 {
+		if runningDockerHost == 0 && noHostCollect < 12 {
+			noHostCollect++
+			continue
+		} else if runningDockerHost == 0 && noHostCollect >= 12 {
 			config.MonitorInfo.Logger.Println("[all-host] no more docker daemon is running, return store all host info to influxDB")
 			return
 		}
+
 		fields["hostNum"] = config.MonitorInfo.GetHostsLen()
 		fields["dockerdRunning"] = runningDockerHost
 		fields["dockerdDead"] = config.MonitorInfo.GetHostsLen() - runningDockerHost
@@ -461,6 +466,7 @@ func WriteAllHostInfo() {
 			oldHostLog = hostLog
 			config.MonitorInfo.Logger.Printf(hostLog)
 		}
+		noHostCollect = 0
 	}
 }
 
