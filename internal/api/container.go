@@ -55,13 +55,13 @@ func ContainerMem(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -76,7 +76,7 @@ func ContainerMem(ctx *gin.Context) {
 			ReadTime string
 		}{Mem: cm.Memory, ReadTime: cm.ReadTime})
 	}
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMem})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMem})
 }
 
 // ContainerMemPercent handles GET requests on /container/metric/mempercent/:id?host=<hostName>
@@ -86,13 +86,13 @@ func ContainerMemPercent(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -108,7 +108,7 @@ func ContainerMemPercent(ctx *gin.Context) {
 		cMemPercent.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemPercent})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemPercent})
 }
 
 // ContainerMemLimit handles GET requests on /container/metric/memlimit/:id?host=<hostName>
@@ -118,13 +118,13 @@ func ContainerMemLimit(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -138,7 +138,7 @@ func ContainerMemLimit(ctx *gin.Context) {
 		cMemLimit.ReadTime = csm[len(csm)-1].ReadTime
 	}
 
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemLimit})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cMemLimit})
 }
 
 // ContainerCPU handles GET requests on /container/metric/cpu/:id?host=<hostName>
@@ -148,13 +148,13 @@ func ContainerCPU(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -170,7 +170,7 @@ func ContainerCPU(ctx *gin.Context) {
 		}{CPU: cm.CPUPercentage, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cCPU})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cCPU})
 }
 
 // ContainerNetworkIO handles GET requests on /container/metric/networkio/:id?host=<hostName>
@@ -180,13 +180,13 @@ func ContainerNetworkIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -204,7 +204,7 @@ func ContainerNetworkIO(ctx *gin.Context) {
 		}{NetworkTX: cm.NetworkTx, NetworkRX: cm.NetworkRx, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cNetworkIO})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cNetworkIO})
 }
 
 // ContainerBlockIO handles GET requests on /container/metric/blockio/:id?host=<hostName>
@@ -214,13 +214,13 @@ func ContainerBlockIO(ctx *gin.Context) {
 	id := ctx.Params.ByName("id")
 	hostName := ctx.DefaultQuery("host", "")
 	if errInfo := checkParam(id, hostName); errInfo != "" {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: errInfo, Metric: nil})
 		return
 	}
 
 	csm, err := models.GetContainerMetrics(hostName, id)
 	if err != nil {
-		ctx.JSONP(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
+		ctx.JSON(http.StatusOK, RepMetric{Status: 0, StatusCode: http.StatusInternalServerError, Msg: err.Error(), Metric: nil})
 		return
 	}
 
@@ -238,7 +238,7 @@ func ContainerBlockIO(ctx *gin.Context) {
 		}{BlockRead: cm.BlockRead, BlockWrite: cm.BlockWrite, ReadTime: cm.ReadTime})
 	}
 
-	ctx.JSONP(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cBlockIO})
+	ctx.JSON(http.StatusOK, RepMetric{Status: 1, StatusCode: http.StatusOK, Msg: "", Metric: cBlockIO})
 }
 
 // ContainerInfo handles GET requests on /container/info?host=<hostName>
@@ -270,13 +270,13 @@ func AddDockerhost(ctx *gin.Context) {
 
 	// if host already in monitor list, return
 	if _, ok := models.DockerHostCache.Load(host); ok {
-		ctx.JSONP(http.StatusNotFound, "host is already in collecting, no need to collect again")
+		ctx.JSON(http.StatusNotFound, "host is already in collecting, no need to collect again")
 		return
 	}
 
 	cli, err := monitor.InitClient(host)
 	if err != nil {
-		ctx.JSONP(http.StatusNotFound, err.Error())
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -285,40 +285,56 @@ func AddDockerhost(ctx *gin.Context) {
 		config.MonitorInfo.AddHost(host)
 	}
 	go monitor.Monitor(cli, host, config.MonitorInfo.Logger)
-	ctx.JSONP(http.StatusOK, "successfully add")
+	ctx.JSON(http.StatusOK, "successfully add")
 }
 
-// StopDockerHostCollect default /host/stop/:host?rm=0
+// StopDockerHostCollect stop docker host /host/:host
 func StopDockerHostCollect(ctx *gin.Context) {
-	var rmStop bool
 	host := ctx.Params.ByName("host")
-	rm := ctx.DefaultQuery("rm", "0")
-	if rm == "1" {
-		rmStop = true
-	}
 
 	if config.MonitorInfo.DockerHostIndex(host) == -1 {
-		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
+		ctx.JSON(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
 	if dh, err := models.GetDockerHost(host); err == nil {
-		dh.StopCollect(rmStop)
+		dh.StopCollect(false)
 		time.Sleep(1 * time.Millisecond)
 		if models.GetHostContainerInfo(host) == nil {
-			ctx.JSONP(http.StatusOK, "successfully stopped")
+			ctx.JSON(http.StatusOK, "successfully stopped")
 			return
 		}
 	}
 
-	ctx.JSONP(http.StatusNotFound, "already stopped, no need to stop again")
+	ctx.JSON(http.StatusNotFound, "already stopped, no need to stop again")
+}
+
+// DeleteDockerHost delete docker host  /host/:host
+func DeleteDockerHost(ctx *gin.Context) {
+	host := ctx.Params.ByName("host")
+
+	if config.MonitorInfo.DockerHostIndex(host) == -1 {
+		ctx.JSON(http.StatusNotFound, "host does not exist, please check again")
+		return
+	}
+
+	if dh, err := models.GetDockerHost(host); err == nil {
+		dh.StopCollect(true)
+		time.Sleep(1 * time.Millisecond)
+		if models.GetHostContainerInfo(host) == nil {
+			ctx.JSON(http.StatusOK, "successfully deleted")
+			return
+		}
+	}
+
+	ctx.JSON(http.StatusNotFound, "already deleted, no need to delete again")
 }
 
 // DownDockerHostInfo return the host info in stop-cache
 func DownDockerHostInfo(ctx *gin.Context) {
 	ips := models.AllStoppedDHIP()
 
-	ctx.JSONP(http.StatusOK, struct {
+	ctx.JSON(http.StatusOK, struct {
 		Len int
 		IPS []string
 	}{Len: len(ips), IPS: ips})
@@ -326,7 +342,7 @@ func DownDockerHostInfo(ctx *gin.Context) {
 
 // AllDockerHostInfo return all host in configure file
 func AllDockerHostInfo(ctx *gin.Context) {
-	ctx.JSONP(http.StatusOK, config.MonitorInfo.GetHosts())
+	ctx.JSON(http.StatusOK, config.MonitorInfo.GetHosts())
 }
 
 // ContainerSliceCapDebug is the slice cap, just for debug
@@ -334,15 +350,15 @@ func ContainerSliceCapDebug(ctx *gin.Context) {
 	host := ctx.Params.ByName("host")
 
 	if config.MonitorInfo.DockerHostIndex(host) == -1 {
-		ctx.JSONP(http.StatusNotFound, "host does not exist, please check again")
+		ctx.JSON(http.StatusNotFound, "host does not exist, please check again")
 		return
 	}
 
 	if dh, err := models.GetDockerHost(host); err == nil {
-		ctx.JSONP(http.StatusOK, dh.Length())
+		ctx.JSON(http.StatusOK, dh.Length())
 		return
 	}
-	ctx.JSONP(http.StatusNotFound, "stopped host")
+	ctx.JSON(http.StatusNotFound, "stopped host")
 }
 
 // CopyAcrossContainer backup copying by order
@@ -491,8 +507,7 @@ func ContainerLogs(ctx *gin.Context) {
 		return
 	}
 
-	dh, err := models.GetDockerHost(hostName)
-	if err == nil && dh.IsValid() {
+	if dh, err := models.GetDockerHost(hostName); err == nil && dh.IsValid() {
 		logBody, err := dh.Cli.ContainerLogs(context.Background(), id, logOptions)
 		if err != nil {
 			err = ws.WriteMessage(1, []byte(err.Error()))
