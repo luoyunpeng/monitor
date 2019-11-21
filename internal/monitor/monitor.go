@@ -80,20 +80,24 @@ func Monitor(dockerCli *client.Client, ip string, logger *log.Logger) {
 		}
 		if status == 0 {
 			logger.Printf("[%s]  container-%s status has been 0, no need to change", ip, e.ID[:12])
+			return
 		} else if status == -100 {
 			logger.Printf("[%s]  no found %s record in table", ip, e.ID[:12])
-		} else {
-			if dh.IsValid() {
-				err := ChangeContainerStatus(e.ID, "0")
-				if err != nil {
-					logger.Printf("[%s]  change container-%s status error %v", ip, e.ID[:12], err)
-					return
-				}
-				logger.Printf("[%s]  change container-%s status to 0", ip, e.ID[:12])
+			return
+		}
+
+		// only when the docker host is valid, then chang the container status in DB
+		if dh.IsValid() {
+			err := ChangeContainerStatus(e.ID, "0")
+			if err != nil {
+				logger.Printf("[%s]  change container-%s status error %v", ip, e.ID[:12], err)
 				return
 			}
-			logger.Printf("[%s]  docker down, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
+			logger.Printf("[%s]  change container-%s status to 0", ip, e.ID[:12])
+			return
 		}
+		logger.Printf("[%s]  docker down, not write container-%s stats to mysql", dh.GetIP(), e.ID[:12])
+
 	})
 
 	eventChan := make(chan events.Message)
@@ -393,8 +397,8 @@ func WriteAllHostInfo() {
 		info                                                     types.Info
 		hostInfo                                                 singleHostInfo
 
-		infoErr error
-		oldInfo string
+		infoErr    error
+		oldHostLog string
 	)
 	fields := make(map[string]interface{}, 6)
 	tags := map[string]string{
@@ -450,18 +454,13 @@ func WriteAllHostInfo() {
 		fields["totalStopped"] = totalContainer - totalRunningContainer
 
 		createMetricAndWrite(measurement, tags, fields, time.Now())
-		info := fmt.Sprintf("[all-host] write all host info: %d, %d, %d, %d, %d, %d",
+		hostLog := fmt.Sprintf("[all-host] write all host info: %d, %d, %d, %d, %d, %d",
 			fields["hostNum"], runningDockerHost, fields["dockerdDead"], totalContainer,
 			totalRunningContainer, fields["totalStopped"])
-		if oldInfo == "" {
-			oldInfo = info
-			config.MonitorInfo.Logger.Printf(info)
-			continue
-		} else if oldInfo == info {
-			continue
+		if oldHostLog == "" || oldHostLog != hostLog {
+			oldHostLog = hostLog
+			config.MonitorInfo.Logger.Printf(hostLog)
 		}
-		config.MonitorInfo.Logger.Printf(info)
-		oldInfo = info
 	}
 }
 
