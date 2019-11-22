@@ -42,26 +42,27 @@ func NewDockerHost(ip string, logger *log.Logger) *DockerHost {
 // Add add new start container
 func (dh *DockerHost) Add(cm *ContainerStats) bool {
 	dh.Lock()
+	defer dh.Unlock()
 
 	if dh.isKnownContainer(cm.ID) == -1 {
 		dh.cStats = append(dh.cStats, cm)
-		dh.Unlock()
 		return true
 	}
-	dh.Unlock()
 	return false
 }
 
 // Remove remove stopped container from cache
-func (dh *DockerHost) Remove(id string) {
+func (dh *DockerHost) Remove(id string) bool {
 	dh.Lock()
+	defer dh.Unlock()
 
 	if i := dh.isKnownContainer(id); i != -1 {
 		// set the container metric to invalid for stopping the collector, also remove container metrics stack
 		dh.cStats[i].isInvalid = true
 		dh.cStats = append(dh.cStats[:i], dh.cStats[i+1:]...)
+		return true
 	}
-	dh.Unlock()
+	return false
 }
 
 // StopCollect stop collecting current host,
@@ -97,30 +98,28 @@ func (dh *DockerHost) isKnownContainer(cid string) int {
 // Length return running container that in monitoring cache
 func (dh *DockerHost) Length() int {
 	dh.RLock()
-	cmsLen := cap(dh.cStats)
-	dh.RUnlock()
+	defer dh.RUnlock()
 
-	return cmsLen
+	return cap(dh.cStats)
 }
 
 // IsValid check current docker host is valid
 func (dh *DockerHost) IsValid() bool {
 	dh.RLock()
-	valid := !dh.closed
-	dh.RUnlock()
+	defer dh.RUnlock()
 
-	return valid
+	return !dh.closed
 }
 
 // AllNames return all running container name
 func (dh *DockerHost) AllNames() []string {
 	dh.RLock()
+	defer dh.RUnlock()
 
 	var names []string
 	for _, cm := range dh.cStats {
 		names = append(names, cm.ContainerName)
 	}
-	dh.RUnlock()
 
 	return names
 }
@@ -138,12 +137,12 @@ func (dh *DockerHost) GetContainerStats() []*ContainerStats {
 // GetAllLastMemory calculate all latest amount mem that running container used
 func (dh *DockerHost) GetAllLastMemory() float64 {
 	dh.RLock()
+	defer dh.RUnlock()
 
 	var totalMem float64
 	for _, cm := range dh.cStats {
 		totalMem += cm.GetLatestMemory()
 	}
-	dh.RUnlock()
 
 	return totalMem
 }
@@ -273,7 +272,7 @@ func (dh *DockerHost) ResizeTtyTo(ctx context.Context, id string, height, width 
 	err := dh.Cli.ContainerExecResize(ctx, id, options)
 
 	if err != nil {
-		dh.Logger.Printf("[%s] Error resize: %s\r", err)
+		dh.Logger.Printf("[%s] Error resize: %s\r", dh.ip, err.Error())
 	}
 	return err
 }

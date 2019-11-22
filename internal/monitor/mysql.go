@@ -35,15 +35,15 @@ func InitMysql() error {
 
 	dataSource := dbUser + ":" + dbPassword + "@tcp(" + dbHost + ")/" + dbName + "?charset=utf8"
 	config.MonitorInfo.Logger.Println("[MySQL] init mysql: ", dataSource)
-	db, err = sql.Open("mysql", dataSource)
-	if err != nil {
+
+	if db, err = sql.Open("mysql", dataSource); err != nil {
 		return err
 	}
 
 	db.SetMaxIdleConns(1)
 	db.SetMaxOpenConns(1)
 	err = db.Ping()
-	if err != nil {
+	if err = db.Ping(); err != nil {
 		db.Close()
 		return err
 	}
@@ -52,10 +52,10 @@ func InitMysql() error {
 
 // ChangeContainerStatus change container status
 func ChangeContainerStatus(id, status string) error {
-	errInit := InitMysql()
-	if errInit != nil {
+	if errInit := InitMysql(); errInit != nil {
 		return errInit
 	}
+
 	//c_id is the primary key, update will only affect one row in table b_container_service
 	_, err := db.Exec("update "+tableContainer+" set status = ? where c_id = ?", status, id)
 	/*
@@ -71,13 +71,13 @@ func ChangeContainerStatus(id, status string) error {
 
 // QueryContainerStatus query container status by container id
 func QueryContainerStatus(id string) (int, error) {
-	errInit := InitMysql()
-	if errInit != nil {
+	if errInit := InitMysql(); errInit != nil {
 		return -100, errInit
 	}
+
 	status := -100
-	err = db.QueryRow("SELECT status from "+tableContainer+" where c_id = ?", id).Scan(&status)
-	if err != nil {
+	statusDML := "SELECT status from " + tableContainer + " where c_id = ?"
+	if err := db.QueryRow(statusDML, id).Scan(&status); err != nil {
 		/*if err == sql.ErrNoRows{
 			no row select
 		}else {
@@ -91,8 +91,7 @@ func QueryContainerStatus(id string) (int, error) {
 
 // QueryOrder query order info by order id
 func QueryOrder(orderId string) ([]models.OrderInfo, error) {
-	errInit := InitMysql()
-	if errInit != nil {
+	if errInit := InitMysql(); errInit != nil {
 		return nil, errInit
 	}
 
