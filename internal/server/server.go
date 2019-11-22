@@ -47,7 +47,7 @@ func cors(c *gin.Context) {
 	origin := c.Request.Header.Get("Origin")
 	if _, ok := whiteList[origin]; ok {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		// allow to access all origin
+		// allow to access the origin
 		c.Header("Access-Control-Allow-Origin", origin)
 		//all method that server supports, in case of to many pre-checking
 		c.Header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE")
@@ -74,13 +74,12 @@ func signalListen(srv *http.Server) {
 	<-quit
 	log.Println("**** Graceful shutdown monitor server ****")
 
-	//release all
+	// release all
 	models.StopAllDockerHost()
-	log.Println("closing mysql db")
-	dbCloseErr := monitor.CloseDB()
-	if dbCloseErr != nil {
+	if dbCloseErr := monitor.CloseDB(); dbCloseErr != nil {
 		log.Printf("Close DB err: %v", dbCloseErr)
 	}
+	log.Println("close DB done")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
