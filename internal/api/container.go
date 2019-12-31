@@ -562,6 +562,11 @@ func ContainerConsole(ctx *gin.Context) {
 		return
 	}
 
+	if !dh.IsContainerRunning(id) {
+		ctx.JSON(http.StatusNotFound, fmt.Errorf("[%s] %s is not running please check", dh.GetIP(), id))
+		return
+	}
+
 	// upgrade http-Get to WebSocket
 	ws, err := upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
