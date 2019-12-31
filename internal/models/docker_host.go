@@ -95,6 +95,13 @@ func (dh *DockerHost) isKnownContainer(cid string) int {
 	return -1
 }
 
+func (dh *DockerHost) IsContainerRunning(cid string) bool {
+	dh.RLock()
+	defer dh.RUnlock()
+
+	return dh.isKnownContainer(cid) != -1
+}
+
 // Length return running container that in monitoring cache
 func (dh *DockerHost) Length() int {
 	dh.RLock()
@@ -224,8 +231,10 @@ func (dh *DockerHost) CopyToContainer(ctx context.Context, content io.ReadCloser
 func (dh *DockerHost) ContainerConsole(ctx context.Context, websocketConn *websocket.Conn, container, cmd string) error {
 	cli := dh.Cli
 	// before do ContainerExecCreate, check the container status, in case of  leaking execIDs
-	if _, err := cli.ContainerInspect(ctx, container); err != nil {
+	if containerInfo, err := cli.ContainerInspect(ctx, container); err != nil {
 		return err
+	} else if !containerInfo.State.Running {
+		return fmt.Errorf("[%s] %s is not running please check", dh.ip, container)
 	}
 
 	rsp, err := cli.ContainerExecCreate(ctx, container, types.ExecConfig{
