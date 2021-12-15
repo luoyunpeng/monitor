@@ -13,9 +13,9 @@ build:
 test:
 	# TODO, add test, $(GOTEST) -v ./...
 clean:
-	$(GOCLEAN)
+	#$(GOCLEAN)
 	rm -f $(BINARY_NAME)
-	rm -f $(BINARY_UNIX)
+	#rm -f $(BINARY_UNIX)
 run:
 	$(GOBUILD) -v -tags=jsoniter -o $(BINARY_NAME) ./cmd/monitor/monitor.go
 	./$(BINARY_NAME)
